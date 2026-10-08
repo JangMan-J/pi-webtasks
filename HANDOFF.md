@@ -5,13 +5,14 @@
 The user asked to switch deep research from mandatory inbound webhooks to outbound SSE with polling fallback.
 Implementation and live acceptance were completed on `feature/outbound-completion`.
 Manager fast-forwarded `master` to `e086691` after independently reviewing and verifying the final cleanup fix.
+Later user decision removed `/webtasks`; Manager reviewed, verified, and fast-forwarded `master` to `0a282c1`.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated; no delegated correction remains pending.
 2. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 3. Treat installation/publication and optional receiver deployment as separate work.
-4. If source changes after `e086691`, rerun proportionate checks before further integration.
+4. If source changes after `0a282c1`, rerun proportionate checks before further integration.
 
 Find checkout locations with `git worktree list`; use branch names and commit hashes rather than assuming a worktree path.
 Read `docs/release-readiness.md` on the implementation branch for detailed live evidence.
@@ -41,7 +42,11 @@ Do not restart completed acceptance runs or the running comparison.
 - Lookup-only startup and lazy Task Group creation remain requirements.
 - No registry of every Pi session: startup session metadata writes were removed and the old `pi_sessions` table dropped.
 - Keep the rename to pi-webtasks; the user clarified that they requested it.
-- Keep `/webtasks`, `WEBTASKS_*`, the new store and login paths.
+- Keep `WEBTASKS_*` and the new store path.
+- Latest user decision supersedes the command/login decision: no `/webtasks` or other registered commands.
+- Account/device login, logout, and balance integration are removed; existing credential files remain untouched.
+- Credentials come from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY`, including package-adjacent `.env` or `parallel.env`; environment precedence is unchanged.
+- Failed result GETs retry once at the next owning-session start; watcher/collector passes do not retry them.
 - Leave the old store unread; the user accepts leaving its two pending registrations unresolved.
 - Implementation and live testing are authorized; installation, publication, and receiver deployment are separate.
 - Leave the sibling `pi-parallelized` checkout and its unfinished work untouched.
@@ -60,7 +65,7 @@ Model costs, research-price estimates, and actual observable charges must be rep
 ## Implemented behavior
 
 - Private SQLite store is created automatically at `~/.pi/agent/webtasks/webtasks.sqlite`, unless `WEBTASKS_DIR` overrides it.
-- Device login now uses `~/.config/pi-webtasks/account.json`; the old account file is not read, so login must be repeated.
+- No device login or account-file reader remains; supply an API key through environment/key files.
 - Collector opens a group event stream from its saved cursor, takes a group-runs snapshot, then consumes events.
 - Cursor advancement and event recording share a SQLite transaction.
 - Metadata-matched snapshot recovery can bind uncertain accepted work without resubmission.
@@ -95,6 +100,7 @@ Important branch commits:
 | `71d65d2` | Follow-up live acceptance record |
 | `67507c3` | Durable-progress backoff and corrected acceptance records |
 | `e086691` | Release event and snapshot requests on every pass exit |
+| `0a282c1` | Remove commands/account integration; retry failed result GETs once per owning-session start |
 
 Manager reruns at `55a0915`: typecheck passed; tests 169/169; `check:all` exit 0, bench 84/84, curate 361 checks.
 Manager reruns at `3450752`: typecheck passed; tests 166/166.
@@ -103,6 +109,8 @@ Manager rerun at `67507c3`: `check:all` exit 0, main 169/169, bench 84/84, curat
 Manager rerun at `e086691`: `check:all` exit 0, main 172/172, bench 84/84, curate 361 checks.
 Three new cleanup tests assert request signals are aborted before collector shutdown.
 Implementer reports mutation checks: all three fail on the unfixed revision; releasing only one request fails the other request's tests.
+Manager rerun at `0a282c1`: `check:all` exit 0, main 174/174, bench 84/84, curate 361 checks.
+New loader assertions verify zero commands; startup retry tests cover successful recovery and repeated failure without watcher-driven retries.
 Earlier failures were a test executing before session startup and a stale bench path; both were fixed.
 
 ## Live findings
@@ -154,7 +162,8 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.
 - Two processes can fetch the same completed result; this can create another artifact but not another paid submission.
 - Notification deduplication rows currently have no pruning policy.
-- `scripts/live-check.ts` still refers to retired tools and is outside `check:all`.
+- `scripts/live-check.ts` still refers to retired tools, including `account.balance`, and is outside `check:all`.
+  Unused legacy operation helpers remain; cleanup was not included in the command-removal scope.
 - CLI report commits `06279df` and `4afd5ce` were cherry-picked to `master` as `3a2b90f` and `8b6b9d6`; only `docs/cli-comparison.md` changed.
   Eight tasks ran across four existing CLI panes and five Pi arms, using implementation `d4665e7`.
   Manager checked the corrected grade sheet: Claude has seven passes and one partial.
@@ -169,5 +178,5 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Other CLIs' charges are unknown.
   Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
-- `master` includes the accepted implementation through `e086691`.
+- `master` includes the accepted implementation through `0a282c1`.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

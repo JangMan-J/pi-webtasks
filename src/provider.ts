@@ -1,8 +1,9 @@
 // Parallel as a Pi provider, registered the same way any provider is. It lists no models, so it adds
-// nothing to the model picker. Pi's /login offers "Sign in with an API key" for it: the login shows the
-// dashboard link, then asks for the key and stores it in Pi's auth.json under this provider id.
+// nothing to the model picker. Pi's /login offers two sign-in methods for it: a browser sign-in (OAuth PKCE,
+// see parallel-oauth.ts) and an API-key paste. Both store under this provider id in Pi's auth.json.
 // Only type-level imports from pi-ai, so this module loads without the Pi runtime.
-import type { ApiKeyCredential, Provider, ProviderAuthInteraction } from "@earendil-works/pi-ai";
+import type { ApiKeyCredential, OAuthCredential, Provider, ProviderAuthInteraction } from "@earendil-works/pi-ai";
+import { browserLogin, type BrowserLoginOptions } from "./parallel-oauth.ts";
 
 export const PARALLEL_PROVIDER_ID = "parallel";
 export const PARALLEL_KEY_URL = "https://platform.parallel.ai/settings?tab=api-keys";
@@ -16,11 +17,20 @@ function noChatStream(): never {
   throw new Error("Parallel is a research key, not a chat provider. It has no chat models.");
 }
 
-export function parallelProvider(): Provider {
+export function parallelProvider(options: BrowserLoginOptions = {}): Provider {
   return {
     id: PARALLEL_PROVIDER_ID,
     name: "Parallel",
     auth: {
+      oauth: {
+        name: "Parallel",
+        loginLabel: "Sign in with Parallel (browser)",
+        isSubscription: false,
+        login: interaction => browserLogin(interaction, options),
+        // The key is long-lived with no refresh grant, so refreshing returns the stored credential unchanged.
+        async refresh(credential: OAuthCredential) { return credential; },
+        async toAuth(credential: OAuthCredential) { return { apiKey: credential.access }; },
+      },
       apiKey: {
         name: "Parallel API key",
         async login(interaction: ProviderAuthInteraction): Promise<ApiKeyCredential> {

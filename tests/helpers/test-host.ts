@@ -93,24 +93,34 @@ export async function fire(handlers: Map<string, ((event: any, ctx: any) => unkn
   for (const handler of handlers.get(type) ?? []) await handler(event, ctx);
 }
 
-/** A stored api-key credential, as Pi's auth.json holds it. Tests change the shared store between calls. */
-export type HostCredential = { type: "api_key"; key?: string };
+/** A stored credential, as Pi's auth.json holds it. Tests change the shared store between calls. */
+export type HostCredential =
+  | { type: "api_key"; key?: string }
+  | { type: "oauth"; access: string; refresh: string; expires: number };
 
 /**
- * The part of Pi's ModelRegistry that the extension uses. It runs each registered provider's own
- * `auth.apiKey.resolve` against the shared credential store, as Pi does, and reports no key on error.
+ * The part of Pi's ModelRegistry that the extension uses, dispatched as Pi's pi-ai resolveProviderAuth does:
+ * a stored oauth credential goes only to `auth.oauth.toAuth`; a stored api_key (or none) goes to
+ * `auth.apiKey.resolve`. A failure reports no key, as Pi does. Expiry is not modelled: tests use the
+ * long-lived sentinel, which Pi never refreshes.
  */
 export function registryFor(providers: any[], credentials: Record<string, HostCredential | undefined>) {
   return {
     async getApiKeyForProvider(providerId: string): Promise<string | undefined> {
-      const method = providers.find(provider => provider.id === providerId)?.auth?.apiKey;
-      if (!method) return undefined;
-      const authContext = {
-        env: async (name: string) => process.env[name]?.trim() || undefined,
-        fileExists: async () => false,
-      };
+      const provider = providers.find(candidate => candidate.id === providerId);
+      const stored = credentials[providerId];
       try {
-        const resolved = await method.resolve({ ctx: authContext, credential: credentials[providerId], signal: new AbortController().signal });
+        if (stored?.type === "oauth") {
+          if (!provider?.auth?.oauth) return undefined;
+          return (await provider.auth.oauth.toAuth(stored)).apiKey;
+        }
+        const method = provider?.auth?.apiKey;
+        if (!method) return undefined;
+        const authContext = {
+          env: async (name: string) => process.env[name]?.trim() || undefined,
+          fileExists: async () => false,
+        };
+        const resolved = await method.resolve({ ctx: authContext, credential: stored, signal: new AbortController().signal });
         return resolved?.auth?.apiKey;
       } catch {
         return undefined;

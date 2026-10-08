@@ -51,7 +51,7 @@ async function filesUnder(dir: string): Promise<string[]> {
   return out;
 }
 
-test("Parallel registers as a provider with no models and only an API-key login", async t => {
+test("Parallel registers as a provider with no models, a browser login and an API-key login", async t => {
   const h = await setup(t, () => json({}));
   assert.equal(h.nativeProviders.length, 1, "exactly one provider is registered");
   const [provider] = h.nativeProviders;
@@ -59,7 +59,8 @@ test("Parallel registers as a provider with no models and only an API-key login"
   assert.equal(provider.name, "Parallel");
   assert.deepEqual(provider.getModels(), [], "no models, so no model-picker entries");
   assert.equal(typeof provider.auth.apiKey.login, "function");
-  assert.equal(provider.auth.oauth, undefined);
+  assert.equal(provider.auth.oauth.loginLabel, "Sign in with Parallel (browser)");
+  assert.equal(typeof provider.auth.oauth.login, "function");
 });
 
 test("login shows the key page, then asks for a secret, and returns the trimmed key", async t => {

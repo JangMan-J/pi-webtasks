@@ -37,18 +37,21 @@ They do not establish acceptance of the three-tool interface.
 
 ## Credentials
 
-Run `/login` in Pi first: choose **Parallel** under *Sign in with an API key* and paste the key. Pi stores it in its own `auth.json` under the `parallel` provider, as it does for other API-key providers.
-Pi 1.1.0's login prompt shows the key as you type it, and the entry is echoed after submit. Pi has no masked prompt, so use this on a screen you control.
-Parallel adds no models; the model picker is unchanged. An empty entry stores nothing.
+Run `/login` in Pi and choose **Parallel**. Pi offers two sign-in methods:
 
-Without a stored login, the tools use the environment variable `_PARALLEL_API_KEY` (`PARALLEL_API_KEY` is also accepted), then the key in `.env` or `parallel.env` beside the package manifest. The order is: stored login, environment, key file. Exported settings take precedence over the key files.
-The standalone webhook receiver has no Pi session, so `/login` does not apply to it; it uses the environment and key files only.
+- **Browser sign-in** (listed under *Sign in with an account*). Pi opens platform.parallel.ai in your browser. There you approve the request for `127.0.0.1` and select an existing API key or create one. Pi receives the approval on a temporary listener on `127.0.0.1`, exchanges it for the key, and stores the key. The listener accepts one callback and closes on success, error, or cancel. After 120 seconds, Pi offers a prompt for the callback address from the browser's address bar, for example over SSH without port forwarding. The listener stays open while that prompt waits, so a browser callback can still complete sign-in.
+- **API key** (listed under *Sign in with an API key*). Paste a key from the API keys page on platform.parallel.ai. Pi's prompt shows the key while you type, as its other API-key prompts do, and the entry is echoed after submit. Pi 1.1.0 has no masked prompt.
 
-`PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
-The latter is the signing secret, not the research key.
+An empty entry stores nothing. Parallel adds no models, so the model picker is unchanged. The extension registers no commands.
+
+The stored login is used first. Without one, the tools use the environment variable `_PARALLEL_API_KEY` (`PARALLEL_API_KEY` is also accepted), then the key in `.env` or `parallel.env` beside the package manifest. Exported settings take precedence over the key files.
+
+The standalone webhook receiver has no Pi session, so `/login` does not apply to it; it uses the environment and key files only. `PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver. It is the signing secret, not the research key.
 Credential files are not packaged or committed.
 
-The extension has no commands and no device login. `/login` is Pi's standard API-key login. The tools read the key only from the stored login, the environment, or the key files above, and check nothing else on disk. Balance is not shown by the extension; check the provider account directly.
+Do not install `@parallel-web/pi-extension` alongside this package. It registers a `web_search` tool, the same name as this package's tool, so the two would collide.
+
+Balance is not shown by the extension; check the provider account directly.
 
 Do not paste credential values into tool arguments, diagnostics, or source files.
 The extension does not create accounts, keys, credit purchases, or monitors.

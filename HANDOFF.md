@@ -10,12 +10,13 @@ Latest wording change is integrated through `7f561f3`, plus Manager cleanup of m
 Native Parallel provider login is integrated through `36f8423`.
 The API Keys link correction is integrated through `5e81012`; the correct tab is plural, `api-keys`.
 User confirmed the link works, then identified `https://docs.parallel.ai/integrations/account-api` as the correct login surface.
-Lead owns a read-only OAuth design investigation; no OAuth implementation or live authentication is authorized by that investigation alone.
+User selected browser PKCE after asking which option supports sign-in without copying a key.
+Lead now owns PKCE implementation; device flow and account key/app creation were not selected.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated.
-2. Review the Lead's read-only Account API OAuth findings before any implementation; API-key fallback remains.
+2. Review the Lead's browser PKCE implementation when delivered; native API-key fallback remains.
 3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 4. Treat installation/publication and optional receiver deployment as separate work.
 5. If source changes after this handoff, rerun proportionate checks before further integration.
@@ -33,7 +34,7 @@ The primary checkout now contains the accepted implementation.
 - SSE implementation assignment is resolved and integrated.
 - CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
 - Native `/login` assignment is resolved and integrated at `36f8423`, following `result:login-finish#1`.
-- Lead's `account-api` assignment researches official OAuth/device flow, previously removed account helpers, and installed Pi's native OAuth interface.
+- `result:account-api#1` established distinct account-device and research-key PKCE flows; Lead now implements the selected browser PKCE path.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -202,11 +203,15 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   A human login with real credentials has not been exercised.
   Fixing Pi's prompt or post-login message is outside this scope.
   Manager verified existing settings load this primary checkout; no settings change or separate install is needed, just reload/restart.
-- OAuth design is pending: distinguish Account API OAuth tokens from research API keys and verify which credentials each endpoint accepts.
-  Determine minimum scopes and whether research access requires reading/selecting or creating a separate app/key.
+- OAuth decision: browser PKCE `/getKeys/` with research-key access, alongside native API-key paste.
+  Device Account API `/getServiceKeys/` tokens are account-only and were not selected.
+  PKCE implementation must verify exact client registration, redirect URI, authorization/token fields, expiry and refresh semantics.
+  Use a temporary loopback-only listener, cryptographic state and PKCE S256, callback validation, cancellation/timeout, and cleanup on every outcome.
+  Preserve native provider id `parallel`, native credential storage, existing API-key credentials, zero chat models, three tools, and no extension commands.
   The old account helper requested broad mutation scopes, including `balance:add`; those must not become defaults without justification.
-  Research is read-only: no live auth calls, real credential writes, account mutations, key/app creation, credit operations, or paid runs.
-  Lead must supply official contract evidence and concrete design choices before implementation.
+  Chosen PKCE scope excludes account administration, key/app creation, balance/credit operations, and public webhook infrastructure.
+  Implementation and synthetic isolated callback/auth tests are authorized; real auth calls or credential/settings writes are not part of this verification.
+  Lead must supply official contract evidence, implementation commit, native-login evidence and `check:all` results before integration.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.

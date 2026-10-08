@@ -8,7 +8,7 @@ Manager fast-forwarded `master` to `e086691` after independently reviewing and v
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
-1. Obtain the CLI report's offline count corrections from the Lead, then integrate its documentation commits.
+1. Implementation and corrected CLI report are integrated; no delegated correction remains pending.
 2. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 3. Treat installation/publication and optional receiver deployment as separate work.
 4. If source changes after `e086691`, rerun proportionate checks before further integration.
@@ -24,7 +24,7 @@ The primary checkout now contains the accepted implementation.
 - Project branch: `feature/outbound-completion`.
 - Latest supervision snapshot: Lead idle, two delegated Agents active.
 - SSE implementation assignment is resolved and integrated.
-- The CLI comparison result is delivered as `result:cli-compare#1`; Lead owns two follow-up report corrections.
+- CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -155,16 +155,19 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
 - Two processes can fetch the same completed result; this can create another artifact but not another paid submission.
 - Notification deduplication rows currently have no pruning policy.
 - `scripts/live-check.ts` still refers to retired tools and is outside `check:all`.
-- CLI report commit `06279df` adds only `docs/cli-comparison.md` on the feature branch; not yet integrated.
+- CLI report commits `06279df` and `4afd5ce` were cherry-picked to `master` as `3a2b90f` and `8b6b9d6`; only `docs/cli-comparison.md` changed.
   Eight tasks ran across four existing CLI panes and five Pi arms, using implementation `d4665e7`.
-  Manager reviewed the report and requested two free corrections: Claude's pass total conflicts with its table (6 versus 7), and raw effort histograms exceed deduplicated tool-call totals.
-  The report must reconcile or clearly distinguish those counting bases before integration.
+  Manager checked the corrected grade sheet: Claude has seven passes and one partial.
+  Reconciliation uses unique toolCall IDs joined to store rows by session: 80 query searches, 62 extract dispatches, and two medium interactive calls.
+  Earlier effort histograms counted repeated stream events, not requests.
   Five cells are contaminated by reads of gold/rubric files; default Pi used mixed models, not the settings default.
   None of the Pi arms submitted `deep_search`; this is limited to the tested prompts and conditions.
   Some research calls used medium/high effort despite the low-effort scope.
-  Research charges were not observable: estimate $0.14–0.46 plus two interactive calls; Pi catalog-based model-cost estimates sum to about $7.97, not invoices.
+  Research charges were not observable: corrected estimate $0.434–$0.436 from the 2026-09-20 price snapshot.
+  This includes $0.224 searches, $0.100 interactive calls, and $0.110–$0.112 for 110 SKU-counted excerpts versus 112 URL arguments.
+  Pi catalog-based model-cost estimates sum to about $7.97, not invoices.
   Other CLIs' charges are unknown.
-  Raw artifacts: `~/.cache/pi-webtasks-compare/`; blind grades: `analysis/grades-blind.json`.
+  Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
 - `master` includes the accepted implementation through `e086691`.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

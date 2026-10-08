@@ -121,7 +121,7 @@ The backend has no group-close operation.
 
 Research state uses the `webtasks.sqlite` store, created automatically and kept private.
 `WEBTASKS_DIR` selects the directory when set. Otherwise the store is `getAgentDir()/webtasks/webtasks.sqlite`.
-Earlier stores are not read or migrated.
+Earlier stores are not read or migrated. The old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite` has no legacy reader. Its 2 pending registrations are accepted as lost (Manager decision, kept with the rename).
 Startup is lookup-only. It writes no session row, creates no remote group, and sends no request. Ownership and resume use the research records and the session's group row.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
@@ -138,7 +138,7 @@ A collector inside the owning Pi session watches the session's Task Group.
 Each pass opens the group event stream from the stored cursor, takes a runs snapshot (no outputs) that binds matching uncertain submissions, then consumes the stream.
 Each completed, failed, cancelled, or action-required run state is saved before the cursor moves.
 On stream or snapshot failure it backs off from 5 seconds, doubling to a 300-second cap with jitter. The largest `retry-after` hint from the pass applies, up to 15 minutes.
-Each events connection is bounded at 10 minutes and each snapshot at 60 seconds, so a stalled body cannot block recovery. A connection that reaches its deadline is treated as healthy and reconnects from the cursor.
+A pass resets the failure streak and pauses 1 second only when its events connection made durable progress: it inserted a new outbound row, or its stored cursor ended at a value different from the one it resumed from (a group status advance counts). Replays of already-recorded events are not progress and escalate the backoff. Each events connection is bounded at 10 minutes and each snapshot at 60 seconds, so a stalled body cannot block recovery. A connection that reaches its deadline without progress takes the normal backoff; one that made progress reconnects from the cursor after the 1-second pause.
 Action-required runs stay watched, so a later completion is collected.
 The snapshot on each loop iteration is the polling fallback.
 The existing result pipeline then fetches the answer once, saves the artifact and citation basis, and notifies only the owning session.

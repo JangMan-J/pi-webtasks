@@ -24,11 +24,9 @@ export const OUTBOUND_BACKOFF = {
   capMs: 300_000,
   /** Upper bound for a server Retry-After hint on 429 or 503. */
   retryAfterCapMs: 900_000,
-  /** A connection that stayed open this long, measured from a successful open, counts as healthy. */
-  healthyLifeMs: 60_000,
-  /** Pause after a healthy end of stream before the next pass. */
+  /** Pause after a connection that made durable progress, before the next pass. */
   healthyEofMs: 1_000,
-  /** Wall-clock bound on one events connection, open and body. Expiry is a healthy end. */
+  /** Wall-clock bound on one events connection, open and body. Expiry without progress is a normal end. */
   connectionMs: 600_000,
   /** Wall-clock bound on one snapshot, open and body. Expiry is a failure. */
   snapshotMs: 60_000,
@@ -195,7 +193,7 @@ export class OutboundCollector {
         const pass = await this.pass();
         if (this.stopped) break;
         if (pass === "idle") continue;
-        if (pass.healthy) {
+        if (pass.progress) {
           this.failures = 0;
           this.reported = false;
           wait = OUTBOUND_BACKOFF.healthyEofMs;
@@ -269,7 +267,7 @@ export class OutboundCollector {
    * One pass: open the events stream from the stored cursor, take the snapshot, then consume the stream.
    * Failures from the open and from the snapshot are both reported, so both Retry-After hints count.
    */
-  private async pass(): Promise<"idle" | { healthy: boolean }> {
+  private async pass(): Promise<"idle" | { progress: boolean }> {
     const group = this.session.group!;
     const store = await this.session.config.getStore();
     const client = await this.session.config.getClient();
@@ -278,10 +276,8 @@ export class OutboundCollector {
       const resumeFrom = (await store.getSessionGroup(this.session.sessionId))?.event_cursor;
       let stream: AsyncIterable<unknown> | undefined;
       let openError: unknown;
-      let openedAt = 0;
       try {
         stream = await client.taskGroup.events(group, { last_event_id: resumeFrom ?? undefined }, { maxRetries: 0, timeout: REQUEST_TIMEOUT_MS, signal: connection.signal });
-        openedAt = Date.now(); // the healthy-lifetime clock starts only once the stream is open
       } catch (err) {
         openError = err;
       }
@@ -297,18 +293,23 @@ export class OutboundCollector {
       const causes = [openError, snapshotError].filter(cause => cause !== undefined);
       if (causes.length) throw new PassFailure(causes);
 
-      let runEvents = 0;
+      // Progress is what this connection made durable: new outbound rows, or a stored cursor that ends
+      // at a value different from the one it resumed from. Replays of recorded events are not progress.
+      let insertedRows = 0;
+      let cursorNow: string | null = resumeFrom ?? null;
       try {
         for await (const raw of stream!) {
           if (this.stopped) break;
           const event = raw as { type?: string; event_id?: string | null; run?: RunLike; error?: { message?: string } };
           if (event.type === "error") throw new Error(`Task group event stream error: ${event.error?.message ?? "unknown"}`);
           if (event.type === "task_group_status") {
-            if (typeof event.event_id === "string") await store.recordOutbound({ session_id: this.session.sessionId, cursor: event.event_id });
+            if (typeof event.event_id === "string") {
+              await store.recordOutbound({ session_id: this.session.sessionId, cursor: event.event_id });
+              cursorNow = event.event_id;
+            }
             continue;
           }
           if (event.type !== "task_run.state" || !event.run) continue;
-          runEvents++;
           const entry = await this.observe(event.run, group);
           const eventCursor = typeof event.event_id === "string" && event.event_id ? event.event_id : undefined;
           if (!entry && eventCursor === undefined) continue;
@@ -317,15 +318,19 @@ export class OutboundCollector {
             ...(entry ? { events: [entry] } : {}),
             ...(eventCursor !== undefined ? { cursor: eventCursor } : {}),
           });
-          if (inserted) this.onRecorded();
+          if (eventCursor !== undefined) cursorNow = eventCursor;
+          if (inserted) {
+            insertedRows += inserted;
+            this.onRecorded();
+          }
         }
       } catch (err) {
-        // Our own connection deadline ends the body abruptly; that is a healthy end, not an error.
+        // Our own connection deadline ends the body abruptly; that is a normal end, not an error.
         if (!connection.expired() || this.stopped) throw err;
       }
       if (this.stopped) return "idle";
-      const lifeMs = Date.now() - openedAt;
-      return { healthy: runEvents > 0 || lifeMs >= OUTBOUND_BACKOFF.healthyLifeMs || connection.expired() };
+      const cursorMoved = cursorNow !== (resumeFrom ?? null);
+      return { progress: insertedRows > 0 || cursorMoved };
     } finally {
       connection.clear(); // releases the HTTP stream on every exit path
     }

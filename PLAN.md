@@ -338,9 +338,9 @@ Rules:
 - `task_group_status` events only advance the cursor.
 - The `event_cursor` returned by group additions seeds the cursor only when none is stored and no other run of the group is bound. It never jumps past older pending jobs. `run_cursor` is not used for events.
 - Backoff is bounded: base 5 seconds, doubling, cap 300 seconds, jittered to 75–100% of each step.
-- A pass is healthy when it consumed any run event, or when its connection stayed open at least 60 seconds after a successful open. A healthy end resets the failure streak and pauses 1 second.
+- A pass resets the failure streak and pauses 1 second only when its events connection made durable progress: it inserted a new outbound row, or its stored cursor ended at a value different from the one it resumed from (a group status advance counts). Replays of already-recorded events are not progress and escalate the backoff. The streak resets, and the next pass follows after a 1-second pause, only on that durable progress.
 - Any other end of stream, a stream error, an `error` event, or a snapshot failure counts as a failure with backoff, so an inactive group's immediate end of stream does not busy-loop.
-- Each events connection is bounded at 10 minutes of wall-clock time, open and body. Expiry is a healthy end: after the 1-second pause the collector reconnects from the stored cursor. Each snapshot is bounded at 60 seconds, open and body; expiry is a failure with backoff. The SDK timeout bounds only the wait for response headers, so these deadlines bound a stalled body.
+- Each events connection is bounded at 10 minutes of wall-clock time, open and body. Expiry without progress takes the normal backoff; expiry after progress reconnects from the stored cursor after the 1-second pause. Each snapshot is bounded at 60 seconds, open and body; expiry is a failure with backoff. The SDK timeout bounds only the wait for response headers, so these deadlines bound a stalled body.
 - `retry-after` and `retry-after-ms` are honored on 429 and 503. When both the events open and the snapshot of a pass fail, the largest hint applies. Hints are capped at 15 minutes.
 - `action_required` runs stay watched after they are recorded, so a later completion of the same run is collected and announced as a separate notice.
 - SDK automatic retries are disabled (`maxRetries: 0`) on collector calls.

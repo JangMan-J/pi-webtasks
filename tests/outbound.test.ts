@@ -301,7 +301,7 @@ test("a signed callback and the outbound stream for one run: one fetch, one noti
   }
 });
 
-test("a stalled events body ends by its connection deadline as a healthy end; the next pass resumes from the cursor", async t => {
+test("a connection that makes progress and then stalls ends at its deadline; the next pass resumes from the cursor", async t => {
   const { dir, inbox } = await fixture(t);
   await seed(inbox, dir, ref("50"), "run_50");
   const sleeps: number[] = [];
@@ -313,7 +313,7 @@ test("a stalled events body ends by its connection deadline as a healthy end; th
   collector.start();
   await waitFor(() => fake.calls.filter(c => c.kind === "events").length >= 2);
   await collector.stop();
-  assert.equal(sleeps[0], OUTBOUND_BACKOFF.healthyEofMs, "a deadline-ended connection is healthy: 1 s pause, not backoff");
+  assert.equal(sleeps[0], OUTBOUND_BACKOFF.healthyEofMs, "the cursor advance is progress, so the deadline-ended connection pauses 1 s");
   assert.equal(fake.calls.filter(c => c.kind === "events")[1]!.last_event_id, "e1", "the next pass resumes from the durable cursor");
 });
 
@@ -345,7 +345,7 @@ test("when the events open and the snapshot both fail, the larger Retry-After hi
   assert.equal(sleeps[0], 600_000, "the events hint is not lost when the snapshot also fails");
 });
 
-test("a healthy pass resets the failure streak, so the next quiet end of stream starts again at the base step", async t => {
+test("a connection that records a new outbound row resets the failure streak to the base step", async t => {
   const { dir, inbox } = await fixture(t);
   await seed(inbox, dir, ref("53"), "run_53");
   const sleeps: number[] = [];
@@ -424,6 +424,54 @@ test("a second entry for an outcome already acknowledged is acknowledged without
   assert.equal(later.deliveries.length, 0, "no second notice for the same run and status");
   assert.deepEqual(await inbox.listHandledUnnotified(), [], "the duplicate is acknowledged");
   assert.equal(fetches, 1);
+});
+
+test("a stalled events body that makes no progress backs off at its deadline, not a 1 s pause", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("72"), "run_72");
+  const sleeps: number[] = [];
+  const fake = fakeClient((_query, opts) => stalled([], opts.signal, true));
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0, deadlines: { connectionMs: 40 } });
+  collector.start();
+  await waitFor(() => sleeps.length >= 2);
+  await collector.stop();
+  assert.deepEqual(sleeps.slice(0, 2), [3_750, 7_500]);
+});
+
+test("a reconnect that replays only already-recorded events backs off with an escalating schedule", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("70"), "run_70");
+  // Recorded on an earlier connection: the outbound row exists and the stored cursor already sits at its event.
+  await inbox.recordOutbound({ session_id: SESSION, events: [settledEntry("run_70", "completed")], cursor: "e2" });
+  const sleeps: number[] = [];
+  const fake = fakeClient(() => stream([runEvent("e2", "run_70", "completed", meta(ref("70")))]));
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  await waitFor(() => sleeps.length >= 3);
+  await collector.stop();
+  assert.deepEqual(sleeps.slice(0, 3), [3_750, 7_500, 15_000], "replays are not progress");
+  assert.equal((await inbox.getSessionGroup(SESSION))!.event_cursor, "e2", "the cursor did not move");
+  assert.equal((await inbox.listAll()).filter(e => e.webhook_id === "outbound:run_70:completed").length, 1, "no second row");
+});
+
+test("a connection that advances the stored cursor resets the backoff to the 1 s pause", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("71"), "run_71");
+  await inbox.recordOutbound({ session_id: SESSION, cursor: "e1" });
+  const sleeps: number[] = [];
+  const responses: (() => AsyncIterable<unknown>)[] = [
+    () => stream([]),
+    () => stream([statusEvent("e2")]), // a group status advance is progress even without a run row
+    () => stream([]),
+    () => stream([]),
+  ];
+  const fake = fakeClient(() => (responses.shift() ?? (() => stream([])))());
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  await waitFor(() => sleeps.length >= 4);
+  await collector.stop();
+  assert.deepEqual(sleeps.slice(0, 4), [3_750, OUTBOUND_BACKOFF.healthyEofMs, 3_750, 7_500]);
+  assert.equal((await inbox.getSessionGroup(SESSION))!.event_cursor, "e2");
 });
 
 // -------------------------------------------------- end to end through Pi's loader

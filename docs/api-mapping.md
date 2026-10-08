@@ -289,8 +289,8 @@ Group events carry no output, so the Task result fetch remains internal and one-
 `task_group_status` events only advance the cursor.
 The cursor from group additions seeds the stored cursor only when none exists and no other run of the group is bound.
 Backoff is 5 seconds doubling to 300 seconds with jitter; `retry-after(-ms)` on 429 and 503 is honored up to 15 minutes, and the largest hint applies when both requests of a pass fail; SDK retries are off for collector calls.
-A pass is healthy when it consumed run events, or its connection stayed open at least 60 seconds after a successful open: it resets the streak and pauses 1 second.
-Each events connection is bounded at 10 minutes wall-clock (expiry is healthy and reconnects from the cursor). Each snapshot is bounded at 60 seconds, open and body (expiry is a failure). The SDK timeout bounds only the time to response headers.
+A pass resets the failure streak and pauses 1 second only when its events connection made durable progress: it inserted a new outbound row, or its stored cursor ended at a value different from the one it resumed from (a group status advance counts). Replays of already-recorded events are not progress and escalate the backoff.
+Each events connection is bounded at 10 minutes wall-clock. Expiry without progress takes the normal backoff; expiry after progress reconnects from the cursor after the 1-second pause. Each snapshot is bounded at 60 seconds, open and body (expiry is a failure). The SDK timeout bounds only the time to response headers.
 `action_required` runs stay watched, so a later completion is collected as a separate notice.
 An uncertain submission missing from the snapshot stays uncertain and stops being polled.
 Status, result, and events requests are documented as not counted against the create rate limit; the collector still backs off.

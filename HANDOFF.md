@@ -7,11 +7,12 @@ Implementation and live acceptance were completed on `feature/outbound-completio
 Manager fast-forwarded `master` to `e086691` after independently reviewing and verifying the final cleanup fix.
 Later user decision removed `/webtasks`; Manager reviewed, verified, and fast-forwarded `master` to `0a282c1`.
 Latest wording change is integrated through `7f561f3`, plus Manager cleanup of monetary wording in result/error safety messages.
+Native Parallel provider login is integrated through `36f8423`.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated.
-2. Native `/login` API-key task is resumed: user chose "the same way any provider is registered", accepting Pi's standard prompt behavior.
+2. Native `/login` is integrated; the existing running Pi process needs `/reload` or restart to load it.
 3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 4. Treat installation/publication and optional receiver deployment as separate work.
 5. If source changes after this handoff, rerun proportionate checks before further integration.
@@ -28,7 +29,7 @@ The primary checkout now contains the accepted implementation.
 - Latest supervision snapshot: Lead idle, two delegated Agents active.
 - SSE implementation assignment is resolved and integrated.
 - CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
-- Native `/login` assignment is resumed after the user's standard-provider decision; no implementation is integrated yet.
+- Native `/login` assignment is resolved and integrated at `36f8423`, following `result:login-finish#1`.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -48,7 +49,8 @@ Do not restart completed acceptance runs or the running comparison.
 - Keep `WEBTASKS_*` and the new store path.
 - Latest user decision supersedes the command/login decision: no `/webtasks` or other registered commands.
 - Account/device login, logout, and balance integration are removed; existing credential files remain untouched.
-- Credentials come from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY`, including package-adjacent `.env` or `parallel.env`; environment precedence is unchanged.
+- Credentials resolve on every call: native Pi stored login first, environment `_PARALLEL_API_KEY` then `PARALLEL_API_KEY`, then package-adjacent `.env` or `parallel.env`.
+  Standalone receiver uses environment/key-file credentials only.
 - Failed result GETs retry once at the next owning-session start; watcher/collector passes do not retry them.
 - Model-facing tool guidance has no cost/price references; human-facing price documentation remains.
 - `deep_search` locates hard-to-find facts and produces detailed reports, including when ordinary search fails or the user is dissatisfied.
@@ -76,7 +78,11 @@ Model costs, research-price estimates, and actual observable charges must be rep
 ## Implemented behavior
 
 - Private SQLite store is created automatically at `~/.pi/agent/webtasks/webtasks.sqlite`, unless `WEBTASKS_DIR` overrides it.
-- No device login or account-file reader remains; supply an API key through environment/key files.
+- Parallel registers as a native API-key provider with zero models, no OAuth, and no extension commands.
+  Use native `/login`, "Sign in with an API key", then Parallel; environment/key-file fallbacks remain.
+  Key management link: `https://platform.parallel.ai/settings?tab=api-key`.
+  Pi stores the key in its native `auth.json`; no custom account-file reader is restored.
+  Stored key is resolved on every request, so mid-session login/logout does not retain a module-level client/key cache.
 - Collector opens a group event stream from its saved cursor, takes a group-runs snapshot, then consumes events.
 - Cursor advancement and event recording share a SQLite transaction.
 - Metadata-matched snapshot recovery can bind uncertain accepted work without resubmission.
@@ -113,6 +119,7 @@ Important branch commits:
 | `e086691` | Release event and snapshot requests on every pass exit |
 | `0a282c1` | Remove commands/account integration; retry failed result GETs once per owning-session start |
 | `7f561f3` | Remove tool-price guidance; reposition deep research |
+| `36f8423` | Native Parallel API-key provider login, no models, per-call credential resolution |
 
 Manager reruns at `55a0915`: typecheck passed; tests 169/169; `check:all` exit 0, bench 84/84, curate 361 checks.
 Manager reruns at `3450752`: typecheck passed; tests 166/166.
@@ -126,6 +133,10 @@ New loader assertions verify zero commands; startup retry tests cover successful
 Manager rerun after `7f561f3` and result/error wording cleanup: `check:all` exit 0, main 175/175, bench 84/84, curate 361 checks.
 Registered-tool text scan covers descriptions, snippets, guidelines, and nested parameter descriptions.
 Whether the revised guidance increases appropriate deep-research use is untested; no further live runs were requested.
+Manager rerun at `36f8423`: `check:all` exit 0, main 183/183, bench 84/84, curate 361 checks.
+Provider tests cover registration, prompt ordering, empty/cancelled input, stored-key tool use, login/logout during a session, and key secrecy in outputs/artifacts.
+Installed Pi 1.1.0 scripted-PTY test in an isolated profile confirmed Parallel listed in `/login` and synthetic credentials saved under `parallel`.
+Evidence index: `~/.cache/pi-webtasks-login-evidence/EMPIRICAL.md`.
 Earlier failures were a test executing before session startup and a stale bench path; both were fixed.
 
 ## Live findings
@@ -172,15 +183,18 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
 - SSE cleanup gap is fixed in `e086691`: deadline cleanup also aborts its request controller.
   Previously snapshot failure or a no-work early return could abandon an opened, unconsumed event request.
   Snapshot request release is covered too; the cleanup reason is distinct from deadline expiry.
-- Native `/login` blocker: installed source routes `secret` through a plain input and echoes the submitted key.
+- Native `/login` caveat: installed source routes `secret` through a plain input and echoes the submitted key.
   Source evidence reported by Lead: `interactive-mode.js:5219/5228`, `login-dialog.js:43,62–63`, and pi-tui input rendering at line 343.
   Zero-model providers appear feasible and native auth can resolve stored credentials at call time, but picker/startup behavior is not empirically verified.
   The original phase made no changes or real credential writes.
-  User resolved this blocker with "the same way any provider is registered"; Lead resumed with standard native login authorized.
-  Use synthetic keys/profiles for verification, leaving actual credentials/settings untouched.
-  Resolve native stored key at call time, with environment/key-file fallback and no stale key after logout.
-  Fixing Pi's prompt itself is outside this chosen scope.
-  The active installed release changed during inspection; recheck runtime revision before implementing after a decision.
+  User resolved this blocker with "the same way any provider is registered"; standard native login is now implemented.
+  Verification used synthetic keys/profiles, leaving actual credentials/settings untouched.
+  After saving the key, Pi prints that Parallel has no default chat model and suggests `/model`; the credential is saved despite that message.
+  Zero models were retained rather than adding fake picker entries.
+  `--list-models` showed no Parallel models; the actual `/model` TUI picker was not opened.
+  A human login with real credentials has not been exercised.
+  Fixing Pi's prompt or post-login message is outside this scope.
+  Manager verified existing settings load this primary checkout; no settings change or separate install is needed, just reload/restart.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.
@@ -202,5 +216,5 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Other CLIs' charges are unknown.
   Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
-- `master` includes the accepted implementation through `7f561f3` and Manager result/error wording cleanup.
+- `master` includes the accepted implementation through `36f8423`.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

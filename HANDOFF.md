@@ -12,11 +12,12 @@ The API Keys link correction is integrated through `5e81012`; the correct tab is
 User confirmed the link works, then identified `https://docs.parallel.ai/integrations/account-api` as the correct login surface.
 User selected browser PKCE after asking which option supports sign-in without copying a key.
 Lead now owns PKCE implementation; device flow and account key/app creation were not selected.
+PKCE candidate `8f50640` is delivered but not integrated: Manager found and reproduced an uncaught malformed-callback URL crash.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated.
-2. Review the Lead's browser PKCE implementation when delivered; native API-key fallback remains.
+2. Review the Lead's PKCE callback parsing fix and regression after candidate `8f50640`; native API-key fallback remains.
 3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 4. Treat installation/publication and optional receiver deployment as separate work.
 5. If source changes after this handoff, rerun proportionate checks before further integration.
@@ -212,6 +213,15 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Chosen PKCE scope excludes account administration, key/app creation, balance/credit operations, and public webhook infrastructure.
   Implementation and synthetic isolated callback/auth tests are authorized; real auth calls or credential/settings writes are not part of this verification.
   Lead must supply official contract evidence, implementation commit, native-login evidence and `check:all` results before integration.
+  Contract supplied in `result:pkce-contract#1`; candidate implementation `8f50640` adds native `auth.oauth` alongside `auth.apiKey`.
+  Token is a long-lived research API key, so its OAuth wrapper uses `Number.MAX_SAFE_INTEGER` expiry and no-network refresh.
+  Manager reran candidate `check:all`: main 197/197, bench 84/84, curate 361 checks.
+  Synthetic native-PTY evidence: `~/.cache/pi-webtasks-login-evidence/pkce/EVIDENCE.md`.
+  Menus/authorize URL and loopback binding/cancel/deny/bad-state cleanup passed; no real browser approval or live token exchange was attempted.
+  Manager's raw local probe `GET http://[ HTTP/1.1` crashed at `parallel-oauth.ts:112` with uncaught `ERR_INVALID_URL`.
+  Lead owns the minimal parsing guard and regression: malformed input must return 400, make no token request, and allow subsequent valid auth.
+  Lead also corrects two misleading statements: README's listener closes only when login completes/cancels, not at the 120-second paste threshold; callback page must not claim sign-in finished before token exchange.
+  Candidate remains off `master` pending these fixes; no real credentials/auth/account/research calls are authorized by this review.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.

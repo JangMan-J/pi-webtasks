@@ -39,10 +39,29 @@ export function applyEnv(entries: Record<string, string>, env: Record<string, st
 /** This module lives in `src/`; key files live in the extension root. */
 const EXTENSION_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
+/**
+ * Research keys found in the package-adjacent files. They are kept out of process.env, so a variable set in
+ * the environment always wins over them. The first file that defines a key wins.
+ */
+const packageKeys: Record<string, string> = {};
+const KEY_NAMES = new Set(["_PARALLEL_API_KEY", "PARALLEL_API_KEY"]);
+
 for (const name of [".env", "parallel.env"]) {
+  let entries: Record<string, string>;
   try {
-    applyEnv(parseEnvText(readFileSync(join(EXTENSION_ROOT, name), "utf8")));
+    entries = parseEnvText(readFileSync(join(EXTENSION_ROOT, name), "utf8"));
   } catch {
-    /* no readable key file at this path */
+    continue; /* no readable key file at this path */
   }
+  const settings: Record<string, string> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (KEY_NAMES.has(key)) packageKeys[key] ??= value;
+    else settings[key] = value;
+  }
+  applyEnv(settings);
+}
+
+/** The research key from the package-adjacent key file, if any. */
+export function packageAdjacentKey(): string | undefined {
+  return ["_PARALLEL_API_KEY", "PARALLEL_API_KEY"].map(name => packageKeys[name]?.trim()).find(Boolean) || undefined;
 }

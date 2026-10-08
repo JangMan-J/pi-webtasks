@@ -37,12 +37,18 @@ They do not establish acceptance of the three-tool interface.
 
 ## Credentials
 
-Use the existing `_PARALLEL_API_KEY` environment variable (`PARALLEL_API_KEY` is also accepted). `PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
+Run `/login` in Pi first: choose **Parallel** under *Sign in with an API key* and paste the key. Pi stores it in its own `auth.json` under the `parallel` provider, as it does for other API-key providers.
+Pi 1.1.0's login prompt shows the key as you type it, and the entry is echoed after submit. Pi has no masked prompt, so use this on a screen you control.
+Parallel adds no models; the model picker is unchanged. An empty entry stores nothing.
+
+Without a stored login, the tools use the environment variable `_PARALLEL_API_KEY` (`PARALLEL_API_KEY` is also accepted), then the key in `.env` or `parallel.env` beside the package manifest. The order is: stored login, environment, key file. Exported settings take precedence over the key files.
+The standalone webhook receiver has no Pi session, so `/login` does not apply to it; it uses the environment and key files only.
+
+`PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
 The latter is the signing secret, not the research key.
-Exported settings take precedence over adjacent `.env` or `parallel.env` key files.
 Credential files are not packaged or committed.
 
-The extension has no commands and no device login. It reads the key only from the environment or the key files above, and checks nothing else on disk. Balance is not shown by the extension; check the provider account directly.
+The extension has no commands and no device login. `/login` is Pi's standard API-key login. The tools read the key only from the stored login, the environment, or the key files above, and check nothing else on disk. Balance is not shown by the extension; check the provider account directly.
 
 Do not paste credential values into tool arguments, diagnostics, or source files.
 The extension does not create accounts, keys, credit purchases, or monitors.
@@ -129,7 +135,7 @@ Existing accepted work and artifacts remain accessible.
 Status: implemented on this branch; live acceptance is pending.
 Live provider SSE and real model navigation are not verified. Offline tests use fake clients only.
 
-`deep_search` needs only provider credentials (`_PARALLEL_API_KEY`, or `PARALLEL_API_KEY`) and the automatic private SQLite store.
+`deep_search` needs only a provider key (from `/login`, or `_PARALLEL_API_KEY` / `PARALLEL_API_KEY`) and the automatic private SQLite store.
 It needs no callback URL, listener, tunnel, public route, or signing secret.
 
 A collector inside the owning Pi session watches the session's Task Group.

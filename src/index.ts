@@ -2,7 +2,8 @@ import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil
 import { join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { formatError, researchClient } from "./ops.ts";
+import { formatError, researchClient, type StoredKey } from "./ops.ts";
+import { PARALLEL_PROVIDER_ID, parallelProvider } from "./provider.ts";
 import { WebhookInbox } from "./webhook-inbox.ts";
 import { WebhookConsumer, type Delivery } from "./webhook-consumer.ts";
 import { WEBTASKS_DIR_ENV } from "./webhook-receiver.ts";
@@ -60,6 +61,8 @@ type Runtime = {
 
 export default function piWebtasks(pi: ExtensionAPI) {
   let rt: Runtime | undefined;
+  // Registered like any provider. /login lists it under "Sign in with an API key".
+  pi.registerProvider(parallelProvider());
 
   async function stopRuntime(): Promise<void> {
     const outgoing = rt;
@@ -125,13 +128,16 @@ export default function piWebtasks(pi: ExtensionAPI) {
     // It warms the group cache and attaches recovery. The collector starts only with a ready group.
     const storeDir = storeDirectory();
     const runtime: Runtime = { sessionId, released: false, session: undefined as never };
+    // The stored login for this provider, read on every request. Nothing about the key is cached here.
+    const modelRegistry = ctx.modelRegistry;
+    const storedKey: StoredKey = async () => (await modelRegistry?.getApiKeyForProvider(PARALLEL_PROVIDER_ID)) ?? undefined;
     runtime.session = new ResearchSession({
       sessionId,
       getStore: async () => {
         if (runtime.released) throw new Error("Session stopped");
         return (runtime.inbox ??= new WebhookInbox(storeDir));
       },
-      getClient: researchClient,
+      getClient: () => researchClient(storedKey),
       webhookUrl: configuredCallback(),
       onSubmitted: () => { runtime.collector?.start(); runtime.collector?.wake(); },
     });
@@ -142,7 +148,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
     runtime.consumer = new WebhookConsumer({
       inbox,
       sessionId,
-      getClient: researchClient,
+      getClient: () => researchClient(storedKey),
       artifactDir,
       cwd: ctx.cwd,
       onLog: msg => { if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: ${msg}`, "warning"); },

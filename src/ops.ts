@@ -1,4 +1,4 @@
-import "./env.ts";
+import { packageAdjacentKey } from "./env.ts";
 import { domainToASCII } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Parallel, APIError, APIConnectionTimeoutError } from "parallel-web";
@@ -19,8 +19,6 @@ export type CallOpts = {
 
 export type ToolArgs = Record<string, unknown>;
 
-let cachedKey: string | undefined;
-
 export function parseJson(value: unknown, name: string): unknown {
   if (value == null || value === "") return undefined;
   if (typeof value === "object") return value;
@@ -40,19 +38,45 @@ export function formatError(err: unknown): string {
   return String(err);
 }
 
-export async function loadResearchApiKey(): Promise<string> {
-  if (cachedKey) return cachedKey;
-  // Read at call time, so a key exported after import still works. The provider's own name is preferred.
-  const key = (process.env._PARALLEL_API_KEY ?? process.env.PARALLEL_API_KEY)?.trim();
-  if (!key) {
-    throw new Error("Parallel API key missing. Set _PARALLEL_API_KEY in the environment, or put it in .env or parallel.env beside the package manifest. PARALLEL_API_KEY is also accepted.");
+/** Where a key stored by Pi's /login comes from. Absent when the caller runs without Pi (the standalone receiver). */
+export type StoredKey = () => Promise<string | undefined>;
+
+/** Shown when Pi runs the extension. The sentence names the one step a user can take inside Pi. */
+export const MISSING_KEY_IN_PI = "Run /login, choose Parallel, and paste an API key — or set _PARALLEL_API_KEY.";
+/** Shown when there is no Pi login, so the only sources are the environment and the package key file. */
+export const MISSING_KEY_STANDALONE = "Parallel API key missing. Set _PARALLEL_API_KEY in the environment, or put it in .env or parallel.env beside the package manifest.";
+
+export type KeySource = "stored credential" | "environment" | "key file";
+
+/**
+ * The one precedence rule for the research key: the stored login, then _PARALLEL_API_KEY, then
+ * PARALLEL_API_KEY from the environment, then the package-adjacent key file. Pure, so tests can drive it.
+ */
+export function resolveResearchKey(input: {
+  stored?: string;
+  env?: Record<string, string | undefined>;
+  packageKey?: string;
+}): { key: string; source: KeySource } | undefined {
+  const stored = input.stored?.trim();
+  if (stored) return { key: stored, source: "stored credential" };
+  const env = input.env ?? process.env;
+  for (const name of ["_PARALLEL_API_KEY", "PARALLEL_API_KEY"]) {
+    const value = env[name]?.trim();
+    if (value) return { key: value, source: "environment" };
   }
-  cachedKey = key;
-  return cachedKey;
+  const file = input.packageKey?.trim();
+  return file ? { key: file, source: "key file" } : undefined;
 }
 
-export async function researchClient(): Promise<Parallel> {
-  return new Parallel({ apiKey: await loadResearchApiKey(), timeout: 120_000, maxRetries: 2 });
+/** Resolved on every call, never cached, so a login or logout takes effect on the next request. */
+export async function researchKey(stored?: StoredKey): Promise<string> {
+  const resolved = resolveResearchKey({ stored: stored ? await stored() : undefined, packageKey: packageAdjacentKey() });
+  if (!resolved) throw new Error(stored ? MISSING_KEY_IN_PI : MISSING_KEY_STANDALONE);
+  return resolved.key;
+}
+
+export async function researchClient(stored?: StoredKey): Promise<Parallel> {
+  return new Parallel({ apiKey: await researchKey(stored), timeout: 120_000, maxRetries: 2 });
 }
 
 function req(opts?: CallOpts, extra: { timeout?: number; maxRetries?: number } = {}) {
@@ -345,7 +369,8 @@ export async function responses(client: Parallel, args: ToolArgs, opts?: CallOpt
   }
   const format = parseJson(args.text_format, "text_format");
   if (format) body.text = { format };
-  const headers = { Authorization: `Bearer ${await loadResearchApiKey()}` };
+  // The client was built for this request with the key resolved for it, so the Bearer header matches it.
+  const headers = { Authorization: `Bearer ${client.apiKey}` };
   if (args.stream === true) {
     const stream = (await client.post("/v1/responses", {
       body: { ...body, stream: true },

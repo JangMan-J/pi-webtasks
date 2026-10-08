@@ -19,6 +19,8 @@ Status: implementation in progress. No installation or publication occurred.
 | Initial baseline | No local dependencies. Typecheck could not resolve Pi or Parallel packages. Tests had 63 passes and 11 dependency-load failures. |
 | Dependency repair | `npm ci --ignore-scripts --no-audit --no-fund` installed the pinned local dependencies. |
 | Credentials | Seven environment tests pass, including deployed names and environment precedence. |
+| Pi `/login` (2026-10-07) | Scripted pty run of installed Pi 1.1.0 with this checkout alone and an isolated agent dir: "Parallel • not configured" is listed under "Sign in with an API key" with zero models. A synthetic key `test-not-a-key` saved under `parallel` in the temp `auth.json`, with no research call. Pi then printed "no default model is configured for provider parallel". Evidence: `~/.cache/pi-webtasks-login-evidence/EMPIRICAL.md`. A human interactive `/login` in a real terminal is not verified. |
+| Login mutation checks (2026-10-07) | Five mutations (dummy model, missing notify, swallowed cancel, module-level client cache, key echoed into an artifact) each fail the test they target in `tests/provider-login.test.ts`. |
 | Public-tool slice | Five non-store-backed tests pass: exact tool set, validation, routine shapes, and native entity lookup. |
 | Entity transport | One synchronous SDK request with the beta header, no callback or group, full artifact, bounded preview, and no public set ID. |
 | Native runtime | Installed Pi reports `1.0.4`; Node reports `v26.10.0`. |
@@ -98,6 +100,7 @@ Navigation outcomes, per model. There is no blanket navigation pass.
 - The rename to pi-webtasks is kept. The old store at `~/.pi/agent/parallelized/webhooks/webhooks.sqlite` is not read, and there is no legacy reader. Its 2 pending registrations are accepted as lost (Manager decision). Nothing in this checkout opened that file for this record.
 - Live acceptance so far is on `d4665e7`. The progress-only backoff rule was added after those runs and is covered by offline tests only.
 - Latest user decision: the `/webtasks` command is removed. The extension registers exactly three model tools and no commands. Credentials come only from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY` in the environment, or from `.env` or `parallel.env` beside the package manifest. There is no device login, balance command, or account file. Manual `recover` is gone.
+- Latest user decision (login): Parallel is a Pi provider with zero models, listed in `/login` under API key. Pi's standard API-key prompt shows the key while it is typed (Pi 1.1.0 has no masked prompt); accepted, with no change to Pi. The lookup order is the stored login, then the environment, then the package key file. This supersedes the env-only credential decision. The standalone receiver is unchanged. Open: after a save Pi reports "no default model is configured for provider parallel", because the provider has zero models. Not changed; the user has not decided on it.
 - Behavior change: a failed result fetch is retried once when its owning session next starts. The retry is a read of the saved run, never a new submission. Watcher passes and inbox writes do not retry it. The earlier records above that used `/webtasks status`, `login`, `balance`, or `recover` describe the command that was removed.
 
 ## Remaining release checks
@@ -119,6 +122,8 @@ Behavior and source support still need acceptance checks.
 Caller-defined strict output schemas remain an open contract choice.
 
 ## Checkout versus installed copy
+
+The installed Pi on this machine loads `../../Projects/JangLabs/pi-webtasks` (master at e220d00, no provider registration), not this worktree. Parallel appears in `/login` only when this checkout is loaded.
 
 This repository is the implementation target.
 The installed receiver's code location, `~/.pi/agent/git/github.com/JangMan-J/pi-parallelized/src/webhook-receiver.ts`, is unverified on this machine. The path is absent under this account, and it may belong to another account. Nothing here reads or changes it.

@@ -44,6 +44,8 @@ export async function loadTools() {
   assert.deepEqual(loaded.errors, []);
   const extension = loaded.extensions[0];
   assert.equal(extension.commands.size, 0, "the extension registers no commands");
+  // Providers the extension registered (queued until Pi binds the runtime; the harness never binds it).
+  const nativeProviders = runtime.pendingNativeProviderRegistrations.map((registration: any) => registration.provider);
   activeTools = [...extension.tools.keys()];
   const { buildSystemPromptSections } = await import(pathToFileURL(resolve(packageDir, "dist/core/system-prompt.js")).href);
   return {
@@ -51,7 +53,7 @@ export async function loadTools() {
     commands: extension.commands,
     handlers: extension.handlers as Map<string, ((event: any, ctx: any) => unknown)[]>,
     activeTools: () => [...activeTools],
-    sent, entries,
+    sent, entries, nativeProviders,
     buildSystemPromptSections,
   };
 }
@@ -66,17 +68,19 @@ export async function loadDirect() {
   const tools = new Map<string, any>();
   const commands = new Map<string, any>();
   const handlers = new Map<string, ((event: any, ctx: any) => unknown)[]>();
+  const nativeProviders: any[] = [];
   const pi = {
     on: (type: string, fn: (event: any, ctx: any) => unknown) => { handlers.set(type, [...(handlers.get(type) ?? []), fn]); },
     registerTool: (def: any) => { tools.set(def.name, def); },
     registerCommand: (name: string, def: any) => { commands.set(name, def); },
+    registerProvider: (provider: any) => { nativeProviders.push(provider); },
     sendMessage: (message: unknown, options: unknown) => { sent.push({ message, options }); },
     appendEntry: (customType: string, data: unknown) => { entries.push({ customType, data }); },
   };
   const { default: extension } = await import(pathToFileURL(resolve(extensionDir, "src/index.ts")).href);
   extension(pi);
   assert.equal(commands.size, 0, "the extension registers no commands");
-  return { tools, commands, handlers, sent, entries, activeTools: () => [...tools.keys()], buildSystemPromptSections: undefined };
+  return { tools, commands, handlers, sent, entries, nativeProviders, activeTools: () => [...tools.keys()], buildSystemPromptSections: undefined };
 }
 
 /**
@@ -87,6 +91,32 @@ export async function loadDirect() {
  */
 export async function fire(handlers: Map<string, ((event: any, ctx: any) => unknown)[]>, type: string, event: unknown, ctx: unknown): Promise<void> {
   for (const handler of handlers.get(type) ?? []) await handler(event, ctx);
+}
+
+/** A stored api-key credential, as Pi's auth.json holds it. Tests change the shared store between calls. */
+export type HostCredential = { type: "api_key"; key?: string };
+
+/**
+ * The part of Pi's ModelRegistry that the extension uses. It runs each registered provider's own
+ * `auth.apiKey.resolve` against the shared credential store, as Pi does, and reports no key on error.
+ */
+export function registryFor(providers: any[], credentials: Record<string, HostCredential | undefined>) {
+  return {
+    async getApiKeyForProvider(providerId: string): Promise<string | undefined> {
+      const method = providers.find(provider => provider.id === providerId)?.auth?.apiKey;
+      if (!method) return undefined;
+      const authContext = {
+        env: async (name: string) => process.env[name]?.trim() || undefined,
+        fileExists: async () => false,
+      };
+      try {
+        const resolved = await method.resolve({ ctx: authContext, credential: credentials[providerId], signal: new AbortController().signal });
+        return resolved?.auth?.apiKey;
+      } catch {
+        return undefined;
+      }
+    },
+  };
 }
 
 export function context(cwd: string, confirm = async (_title: string, _body: string) => true, sessionId = "test-session") {
@@ -136,6 +166,8 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   process.env.WEBTASKS_WEBHOOK_URL = options.webhookUrl ?? "";
   process.env.WEBTASKS_OUTPUT_FORMAT = "json";
   const calls: Call[] = [];
+  // Shared across this host's instances, as one Pi auth.json is shared across a session's reloads.
+  const credentials: Record<string, HostCredential | undefined> = {};
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const raw = await request.text();
@@ -153,7 +185,7 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   /** One extension instance, as Pi builds one per session start or reload. */
   async function instance(sessionId = options.sessionId ?? "session-a") {
     const loaded = (options.direct ? await loadDirect() : await loadTools()) as Awaited<ReturnType<typeof loadTools>>;
-    const ctx = context(dir, undefined, sessionId);
+    const ctx = { ...context(dir, undefined, sessionId), modelRegistry: registryFor(loaded.nativeProviders, credentials) };
     const progress: string[] = [];
     const self: any = {
       ...loaded, ctx, progress, sessionId,
@@ -172,7 +204,7 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   }
   const first = await instance();
   return {
-    dir, calls, instance, ...first,
+    dir, calls, instance, credentials, ...first,
     artifacts: resolve(dir, "agent/webtasks/results"),
     inboxDir: options.webhookDir ?? resolve(dir, "agent/webtasks"),
   };

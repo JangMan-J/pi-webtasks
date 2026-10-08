@@ -10,10 +10,11 @@ Latest wording change is integrated through `7f561f3`, plus Manager cleanup of m
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
-1. Implementation and corrected CLI report are integrated; no delegated correction remains pending.
-2. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
-3. Treat installation/publication and optional receiver deployment as separate work.
-4. If source changes after this handoff, rerun proportionate checks before further integration.
+1. Implementation and corrected CLI report are integrated.
+2. New native `/login` API-key task is blocked on the user's prompt-exposure decision; Lead is asking, so avoid a duplicate questionnaire.
+3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
+4. Treat installation/publication and optional receiver deployment as separate work.
+5. If source changes after this handoff, rerun proportionate checks before further integration.
 
 Find checkout locations with `git worktree list`; use branch names and commit hashes rather than assuming a worktree path.
 Read `docs/release-readiness.md` on the implementation branch for detailed live evidence.
@@ -27,6 +28,7 @@ The primary checkout now contains the accepted implementation.
 - Latest supervision snapshot: Lead idle, two delegated Agents active.
 - SSE implementation assignment is resolved and integrated.
 - CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
+- New native `/login` assignment is paused: `result:outbound-impl#10` reports a prompt-masking blocker, no implementation or commit.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -52,6 +54,9 @@ Do not restart completed acceptance runs or the running comparison.
 - `deep_search` locates hard-to-find facts and produces detailed reports, including when ordinary search fails or the user is dissatisfied.
 - `web_search` guidance directs models to deep research after a few unsuccessful searches instead of repeated searching.
 - No-resubmit safety messages remain, with monetary wording removed.
+- Latest requested feature: API-key entry through Pi's own `/login`, opening/showing `https://platform.parallel.ai/settings?tab=api-key` and using native auth storage.
+  This does not restore extension commands or OAuth.
+  Masked entry was required but the installed Pi source does not currently provide it; the exposure decision remains open.
 - Leave the old store unread; the user accepts leaving its two pending registrations unresolved.
 - Implementation and live testing are authorized; installation, publication, and receiver deployment are separate.
 - Leave the sibling `pi-parallelized` checkout and its unfinished work untouched.
@@ -166,6 +171,12 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
 - SSE cleanup gap is fixed in `e086691`: deadline cleanup also aborts its request controller.
   Previously snapshot failure or a no-work early return could abandon an opened, unconsumed event request.
   Snapshot request release is covered too; the cleanup reason is distinct from deadline expiry.
+- Native `/login` blocker: installed source routes `secret` through a plain input and echoes the submitted key.
+  Source evidence reported by Lead: `interactive-mode.js:5219/5228`, `login-dialog.js:43,62–63`, and pi-tui input rendering at line 343.
+  Zero-model providers appear feasible and native auth can resolve stored credentials at call time, but picker/startup behavior is not empirically verified.
+  Lead made no changes or real credential writes and is asking whether to accept visible entry or retain env/key-file only.
+  Fixing Pi's prompt itself would be separate scope requiring explicit authorization.
+  The active installed release changed during inspection; recheck runtime revision before implementing after a decision.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.

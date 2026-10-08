@@ -39,6 +39,15 @@ export type SessionGroup = {
   error?: string;
   created_at: number;
   updated_at: number;
+  /** Resume position in the group's event stream. Advanced only after the events it covers are durable. */
+  event_cursor?: string;
+};
+
+/** Synthetic outbound entries for one collector pass, plus an optional cursor to commit with them. */
+export type OutboundInput = {
+  session_id: string;
+  events?: { webhook_id: string; resource_id: string; event_type: string; event: unknown }[];
+  cursor?: string;
 };
 
 export type ResearchRecord = {

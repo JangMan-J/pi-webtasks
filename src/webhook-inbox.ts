@@ -55,7 +55,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve, join } from "node:path";
-import type { ConversationRecord, Effort, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
+import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
 
 export type ResourceKind = "task" | "findall" | "monitor";
 
@@ -145,6 +145,7 @@ type SessionGroupRow = {
   error: string | null;
   created_at: number;
   updated_at: number;
+  event_cursor: string | null;
 };
 
 type ResearchRow = {
@@ -260,6 +261,7 @@ function rowToSessionGroup(row: SessionGroupRow): SessionGroup {
     error: row.error ?? undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    event_cursor: row.event_cursor ?? undefined,
   };
 }
 
@@ -476,6 +478,8 @@ export class WebhookInbox {
         updated_at INTEGER NOT NULL
       )
     `);
+    const groupCols = (db.prepare("PRAGMA table_info(session_groups)").all() as { name: string }[]).map(c => c.name);
+    if (!groupCols.includes("event_cursor")) db.exec("ALTER TABLE session_groups ADD COLUMN event_cursor TEXT");
     db.exec(`
       CREATE TABLE IF NOT EXISTS research (
         reference TEXT PRIMARY KEY,
@@ -576,6 +580,7 @@ export class WebhookInbox {
       ),
       getResearch: db.prepare("SELECT * FROM research WHERE reference = ?"),
       getResearchByRun: db.prepare("SELECT * FROM research WHERE run_id = ?"),
+      listResearchForSession: db.prepare("SELECT * FROM research WHERE session_id = ? ORDER BY created_at ASC"),
       insertResearch: db.prepare(
         "INSERT INTO research (reference, session_id, group_id, run_id, interaction_id, parent, query, effort, domains_json, status, artifact_dir, cwd, artifact, creation_artifact, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ),
@@ -878,6 +883,57 @@ export class WebhookInbox {
     await this.init();
     const row = this.stmts.getResearch!.get(reference) as ResearchRow | undefined;
     return row ? rowToResearch(row) : undefined;
+  }
+
+  /** All research records of one session, oldest first. Lookup only. */
+  async listResearchForSession(sessionId: string): Promise<ResearchRecord[]> {
+    await this.init();
+    return (this.stmts.listResearchForSession!.all(sessionId) as ResearchRow[]).map(rowToResearch);
+  }
+
+  /**
+   * Durably records synthetic outbound entries and, in the same transaction, optionally advances
+   * the session's event-stream cursor. The cursor therefore never moves past an event whose effect
+   * is not on disk. Duplicate entry IDs are ignored; returns how many entries were newly inserted.
+   */
+  async recordOutbound(input: OutboundInput): Promise<number> {
+    await this.init();
+    requireText(input.session_id, "session id");
+    return this.tx(() => {
+      let inserted = 0;
+      for (const entry of input.events ?? []) {
+        const result = this.stmts.insertEvent!.run(
+          entry.webhook_id, Date.now(), JSON.stringify(entry.event), entry.resource_id, "task", entry.event_type,
+        );
+        inserted += Number(result.changes);
+      }
+      if (input.cursor !== undefined) {
+        requireText(input.cursor, "cursor");
+        this.db!.prepare("UPDATE session_groups SET event_cursor = ? WHERE session_id = ?").run(input.cursor, input.session_id);
+      }
+      return inserted;
+    });
+  }
+
+  /**
+   * Adopts an addRuns event cursor for a group's first tracked run only, and only while no cursor is
+   * stored. An existing cursor is never moved, so older pending runs cannot be skipped.
+   */
+  async adoptEventCursor(reference: string, cursor: string): Promise<boolean> {
+    await this.init();
+    if (!cursor) return false;
+    return this.tx(() => {
+      const row = this.stmts.getResearch!.get(reference) as ResearchRow | undefined;
+      if (!row) return false;
+      const group = this.stmts.getSessionGroup!.get(row.session_id) as SessionGroupRow | undefined;
+      if (!group || group.group_id !== row.group_id || group.event_cursor != null) return false;
+      const others = this.db!.prepare(
+        "SELECT COUNT(*) AS n FROM research WHERE session_id = ? AND group_id = ? AND run_id IS NOT NULL AND reference != ?",
+      ).get(row.session_id, row.group_id, reference) as { n: number };
+      if (others.n > 0) return false;
+      this.db!.prepare("UPDATE session_groups SET event_cursor = ? WHERE session_id = ?").run(cursor, row.session_id);
+      return true;
+    });
   }
 
   async researchForRun(runId: string): Promise<ResearchRecord | undefined> {

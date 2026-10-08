@@ -8,7 +8,7 @@ import type Parallel from "parallel-web";
 import { extract, findall, formatError, responses, search } from "./ops.ts";
 import { ArtifactError, getPreviewLimit, researchOutput, researchReceipt, type Receipt } from "./results.ts";
 import { presentEvidence } from "./evidence.ts";
-import type { ConversationRecord, Effort, ResearchRecord, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
+import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
 
 /** Persistence needed here; WebhookInbox provides it. Calls are async. */
 export type ResearchStore = {
@@ -20,7 +20,10 @@ export type ResearchStore = {
   getResearch(reference: string): Promise<ResearchRecord | undefined>;
   updateResearch(reference: string, patch: Partial<ResearchRecord>): Promise<unknown>;
   researchForRun(runId: string): Promise<ResearchRecord | undefined>;
+  listResearchForSession(sessionId: string): Promise<ResearchRecord[]>;
   acceptResearch(reference: string, runId: string, creationArtifact?: string): Promise<unknown>;
+  recordOutbound(input: OutboundInput): Promise<number>;
+  adoptEventCursor(reference: string, cursor: string): Promise<boolean>;
   saveConversation(record: ConversationRecord): Promise<unknown>;
   getConversation(reference: string): Promise<ConversationRecord | undefined>;
   upsertSession(record: SessionRecord): Promise<unknown>;
@@ -60,8 +63,10 @@ export type ResearchSessionConfig = {
   sessionId: string;
   getStore: () => Promise<ResearchStore>;
   getClient: () => Promise<Parallel>;
-  /** Callback destination for deep research. Undefined disables deep submission. */
+  /** Optional signed per-run callback. Completion also arrives through the group's event stream. */
   webhookUrl?: string;
+  /** Runs after each deep submission settles, so the owning session's outbound collector picks up new runs. */
+  onSubmitted?: () => void;
 };
 
 /** Runtime state for one Pi session. A reload or session switch builds a new one. */
@@ -93,6 +98,8 @@ export class ResearchSession {
   }
 
   get stopped(): boolean { return this.closed; }
+  /** This session's Task Group, once ready. */
+  get group(): string | undefined { return this.groupId; }
   get signal(): AbortSignal { return this.abort.signal; }
 
   track<T>(work: Promise<T>): Promise<T> {
@@ -385,12 +392,6 @@ export async function interactiveSearch(ctx: CallContext, session: ResearchSessi
 
 // --------------------------------------------------------------- deep_search
 
-function needsCallback(session: ResearchSession): string {
-  const url = session.config.webhookUrl;
-  if (!url) throw new Error("Deep research is not available: completion delivery is not configured. Ask the user to set it up, or use interactive_search.");
-  return url;
-}
-
 type ResearchBody = { content?: unknown; basis?: unknown };
 
 function researchBody(data: any): ResearchBody | undefined {
@@ -465,7 +466,7 @@ async function readResearch(ctx: CallContext, session: ResearchSession, ref: str
 
 type Outcome = { reference: string; state: "accepted" | "not_accepted" | "uncertain" | "not_submitted"; error?: string };
 
-async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: string, webhookUrl: string, brief: string, query: string, effort: Effort, domains: string[] | undefined, previousInteraction?: string, parent?: string): Promise<Outcome> {
+async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: string, webhookUrl: string | undefined, brief: string, query: string, effort: Effort, domains: string[] | undefined, previousInteraction?: string, parent?: string): Promise<Outcome> {
   const store = await session.config.getStore();
   const client = await session.config.getClient();
   const ref = `research_${randomUUID()}`;
@@ -482,7 +483,7 @@ async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: 
     return { reference: ref, state: status === "failed" ? "not_accepted" : "uncertain", error };
   };
   if (session.stopped) return fail("failed", "Session stopped before dispatch");
-  let created: { run_ids?: unknown };
+  let created: { run_ids?: unknown; event_cursor?: string | null };
   try {
     created = await client.taskGroup.addRuns(groupId, {
       inputs: [{
@@ -490,7 +491,7 @@ async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: 
         processor: EFFORT_POLICY.deep[effort],
         ...(previousInteraction ? { previous_interaction_id: previousInteraction } : {}),
         metadata: { webtasks_ref: ref, webtasks_session: session.sessionId, webtasks_group: groupId },
-        webhook: { url: webhookUrl, event_types: TASK_EVENTS },
+        ...(webhookUrl ? { webhook: { url: webhookUrl, event_types: TASK_EVENTS } } : {}),
         ...(domains ? { source_policy: { include_domains: domains } } : {}),
       }] as never,
       default_task_spec: { output_schema: { type: "text", description: "Cited research report" } } as never,
@@ -513,6 +514,10 @@ async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: 
     // acceptance record; never retry the paid add and never rebind the run here.
     const detail = formatError(err).split(ids[0]).join("[run]");
     return fail("uncertain", `Accepted but not recorded locally: ${detail}`, creationArtifact ? { creation_artifact: creationArtifact } : {});
+  }
+  // Best effort: the run is already tracked, and the collector's snapshot covers any gap.
+  if (typeof created.event_cursor === "string" && created.event_cursor) {
+    await store.adoptEventCursor(ref, created.event_cursor).catch(() => undefined);
   }
   return { reference: ref, state: "accepted" };
 }
@@ -547,7 +552,7 @@ export async function deepSearch(ctx: CallContext, session: ResearchSession, raw
     if (typeof interaction === "string" && interaction) previousInteraction = interaction;
     grounding = `\n\nEarlier research findings to build on (originally asked: ${prior.query}):\n${answer}`;
   }
-  const webhookUrl = needsCallback(session);
+  const webhookUrl = session.config.webhookUrl;
   if (session.stopped) throw new Error("Session is stopping; research was not submitted");
   await session.config.getClient(); // credential problems surface before any setup
   const outcomes: Outcome[] = [];
@@ -563,7 +568,11 @@ export async function deepSearch(ctx: CallContext, session: ResearchSession, raw
       }
     }
   })());
-  await work;
+  try {
+    await work;
+  } finally {
+    session.config.onSubmitted?.();
+  }
   const accepted = outcomes.filter(o => o.state === "accepted");
   const lines = outcomes.map((o, i) => o.state === "not_submitted"
     ? `- Brief ${i + 1}: not submitted (an earlier brief was not accepted)`

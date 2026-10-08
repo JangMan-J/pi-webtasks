@@ -139,7 +139,7 @@ export function normalizeEvent(event: unknown): NormalizedEvent {
   return { action: "unrecognized", event_type: type };
 }
 
-function taskRunStatus(event: unknown): string | undefined {
+export function taskRunStatus(event: unknown): string | undefined {
   const data = asRecord(asRecord(event).data);
   return firstOf(str(data.status), str(asRecord(data.run).status));
 }

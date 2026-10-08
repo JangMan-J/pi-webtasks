@@ -17,15 +17,21 @@ function responsesReply(call: Call) {
   return json({ id: `resp_${answers}`, status: "completed", output_text: `answer ${answers}`, output: [], request: call.body });
 }
 
+/** Empty event stream: the outbound collector's quiet EOF. */
+const quietStream = () => new Response("", { headers: { "Content-Type": "text/event-stream" } });
+
 function deepHost(onGroup?: () => Promise<void>) {
   let runs = 0;
   return async (call: Call) => {
     if (call.path === "/v1/tasks/groups" && call.method === "POST") { await onGroup?.(); return json({ taskgroup_id: "tg_1", status: { is_active: false } }); }
     if (/\/runs$/.test(call.path) && call.method === "POST") return json({ run_ids: [`run_${++runs}`], status: { is_active: true } });
+    if (call.method === "GET" && /^\/v1\/tasks\/groups\/tg_1\/(events|runs)$/.test(call.path)) return quietStream();
     if (/^\/v1\/tasks\/runs\/run_\d+$/.test(call.path)) return json({ run_id: "run_1", status: "running" });
     return json({ error: `unexpected ${call.method} ${call.path}` }, 500);
   };
 }
+/** Submission calls only: outbound collector polls (GET events/runs) are excluded. */
+const submissions = (calls: Call[]) => calls.filter(c => c.method === "POST");
 const posts = (calls: Call[], re: RegExp) => calls.filter(c => c.method === "POST" && re.test(c.path));
 async function store(dir: string) { return new WebhookInbox(dir); }
 
@@ -53,7 +59,6 @@ test("invalid input is rejected before any network request or setup", async t =>
     ["deep_search", { research: "nope" }], ["deep_search", { research: "conversation_00000000-0000-0000-0000-000000000000" }],
     ["deep_search", { research: "research_00000000-0000-0000-0000-000000000000", effort: "low" }],
     ["deep_search", { research: "research_00000000-0000-0000-0000-000000000000", domains: ["a.test"] }],
-    ["deep_search", { query: "needs a callback" }], // no inbox or callback configured
     ["web_search", { query: "q", effort: "max" }],
     ...["low", "medium", "high"].flatMap(effort => [
       ["web_search", { urls: ["https://a.test/x"], effort }], ["web_search", { entity: "people", query: "q", effort }],
@@ -165,7 +170,8 @@ test("reading a reference never submits; a reload reuses the saved group without
   const before = h.calls.length;
   const read = await h.call("deep_search", { research: ref });
   assert.match(read.text, /Status: pending/);
-  assert.deepEqual(h.calls.slice(before).map(c => `${c.method} ${c.path}`), ["GET /v1/tasks/runs/run_1"], "read-only status snapshot only");
+  assert.deepEqual(h.calls.slice(before).filter(c => c.path.startsWith("/v1/tasks/runs/")).map(c => `${c.method} ${c.path}`), ["GET /v1/tasks/runs/run_1"], "read-only status snapshot only");
+  assert.equal(submissions(h.calls.slice(before)).length, 0, "reading never submits");
   await h.stop();
   const reloaded = await h.instance("session-a");
   await reloaded.start();
@@ -310,13 +316,13 @@ test("effort policy: exact backend choice per level for discovery, conversation 
   for (const c of h.calls) {
     if (c.path === "/v1/search") modes.push(c.body.mode);
     if (c.path === "/v1/responses") levels.push(c.body.reasoning.effort);
-    if (/\/runs$/.test(c.path)) processors.push(c.body.inputs[0].processor);
+    if (c.method === "POST" && /\/runs$/.test(c.path)) processors.push(c.body.inputs[0].processor);
   }
   assert.deepEqual(modes, ["fast", "fast", "basic", "advanced"]);
   assert.deepEqual(levels, ["low", "low", "medium", "high"]);
   assert.deepEqual(processors, ["core", "core", "pro", "ultra2x"]);
   assert.equal(h.calls.filter(c => c.path === "/v1/search").length, 4, "one request per call: no automatic escalation");
-  for (const c of h.calls) assert.doesNotMatch(JSON.stringify(c.body), /turbo|"ultra"|"base"/);
+  for (const c of h.calls) assert.doesNotMatch(JSON.stringify(c.body ?? {}), /turbo|"ultra"|"base"/);
   const cost = JSON.stringify([...h.tools.values()].map((tool: any) => tool.promptGuidelines));
   for (const price of ["$0.025", "$0.10", "$0.60", "$0.01,", "$0.05,", "$0.25", "$0.001", "$0.005"]) assert.ok(cost.includes(price), price);
 });

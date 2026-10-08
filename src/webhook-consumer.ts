@@ -15,7 +15,7 @@ import { watch, type FSWatcher } from "node:fs";
 import type { Parallel } from "parallel-web";
 import { WebhookInbox, type ResourceKind } from "./webhook-inbox.ts";
 import type { ResearchRecord } from "./research-types.ts";
-import { processInbox } from "./webhook-worker.ts";
+import { processInbox, taskRunStatus } from "./webhook-worker.ts";
 
 export { normalizeEvent } from "./webhook-worker.ts";
 export type { ConsumerAction, NormalizedEvent } from "./webhook-worker.ts";
@@ -152,10 +152,22 @@ export class WebhookConsumer {
 
   private async collectDeliveries(): Promise<Delivery[]> {
     const deliveries: Delivery[] = [];
+    // A run can be reported by both a signed callback and the outbound stream. Notify once per
+    // run and reported status; a later different status (for example completion after
+    // action_required) is its own notification. The duplicate is acknowledged without a notice.
+    const notified = new Set<string>();
     for (const entry of await this.inbox.listHandledUnnotified()) {
       if (!entry.resource_id || !entry.kind) continue;
       const registration = await this.inbox.getRegistration(entry.resource_id);
       if (!registration || registration.session_id !== this.sessionId) continue;
+      if (entry.kind === "task") {
+        const key = `${entry.resource_id}:${taskRunStatus(entry.event) ?? ""}`;
+        if (notified.has(key)) {
+          await this.inbox.markNotified(entry.webhook_id);
+          continue;
+        }
+        notified.add(key);
+      }
       const research = entry.kind === "task" ? await this.inbox.researchForRun(entry.resource_id) : undefined;
       const delivery: Delivery = {
         webhook_id: entry.webhook_id,

@@ -38,6 +38,10 @@ async function deliver(url: string, id: string, event: unknown): Promise<number>
   return response.status;
 }
 
+/** Outbound collector polls (GET events and runs). Webhook lifecycle assertions exclude them. */
+const isPoll = (c: { method: string; path: string }) => c.method === "GET" && /\/v1\/tasks\/groups\/[^/]+\/(events|runs)$/.test(c.path);
+const remote = (calls: { method: string; path: string }[]) => calls.filter(c => !isPoll(c)).map(c => c.path);
+
 async function waitFor(check: () => boolean | Promise<boolean>): Promise<void> {
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
@@ -98,7 +102,7 @@ test("registered deep_search -> signed callback -> saved evidence -> one owning-
     assert.equal(await deliver(receiver.url, "wh-e2e", event), 200);
     await delay(600);
     assert.equal(owner.sent.length, 1, "duplicate callback must not wake the owner twice");
-    assert.deepEqual(h.calls.map(c => c.path), [
+    assert.deepEqual(remote(h.calls), [
       "/v1/tasks/groups", "/v1/tasks/groups/tgrp_e2e/runs", "/v1/tasks/runs/trun_e2e/result",
     ]);
   } finally {
@@ -136,7 +140,8 @@ test("stopped owner: receiver saves evidence, foreign session stays silent, resu
     const created = await owner.call("deep_search", { query: "offline objective" });
     const reference = created.details.references[0];
     await owner.stop();
-    assert.equal(h.calls.length, 2, "session stop must not poll or drain remote work");
+    assert.equal(remote(h.calls).length, 2, "session stop must not drain remote work");
+    const pollsAtStop = h.calls.filter(isPoll).length;
     await stranger.start();
     assert.equal(await deliver(receiver.url, "wh-offline", {
       type: "task_run.status", data: { run_id: "trun_offline", status: "completed" },
@@ -148,18 +153,19 @@ test("stopped owner: receiver saves evidence, foreign session stays silent, resu
     assert.equal(owner.sent.length, 0);
     assert.equal(stranger.sent.length, 0, "foreign session must never deliver the owner's outcome");
     assert.ok((await inbox.listHandledUnnotified()).some(e => e.webhook_id === "wh-offline"));
-    const paths = h.calls.map(c => c.path);
+    const paths = remote(h.calls);
 
     resumed = await h.instance("s-offline-owner");
     await resumed.start();
     assert.equal(resumed.sent.length, 1);
     assert.equal(resumed.sent[0].message.details.reference, reference);
     assert.equal(resumed.sent[0].message.details.status, "completed");
-    assert.deepEqual(h.calls.map(c => c.path), paths, "resume must use saved evidence, not fetch again");
+    assert.deepEqual(remote(h.calls), paths, "resume must use saved evidence, not fetch again");
     assert.equal((await inbox.listHandledUnnotified()).length, 0);
     const read = await resumed.call("deep_search", { research: reference });
     assert.ok(read.text.includes("offline answer"));
-    assert.deepEqual(h.calls.map(c => c.path), paths, "completed reference reads do not create or fetch");
+    assert.deepEqual(remote(h.calls), paths, "completed reference reads do not create or fetch");
+    assert.equal(h.calls.filter(isPoll).length, pollsAtStop, "a stopped owner makes no polls; the resumed owner has nothing pending");
   } finally {
     await resumed?.stop();
     await stranger.stop();

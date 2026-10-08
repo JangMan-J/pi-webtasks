@@ -8,6 +8,7 @@ import { WebhookInbox } from "./webhook-inbox.ts";
 import { WebhookConsumer, type Delivery } from "./webhook-consumer.ts";
 import { CONVENTIONAL_WEBHOOK_INBOX_DIR, WEBHOOK_DIR_ENV } from "./webhook-receiver.ts";
 import { ResearchSession, deepSearch, interactiveSearch, webSearch, type CallContext } from "./research.ts";
+import { OutboundCollector } from "./outbound.ts";
 
 const EFFORT = StringEnum(["low", "medium", "high"] as const, { description: "Default low. Higher levels take longer and go deeper." });
 
@@ -29,10 +30,15 @@ function webhookInboxDir(): string | undefined {
   return dir && dir.trim() ? dir : undefined;
 }
 
-/** Deep research needs both a shared inbox and a valid callback URL. */
+/** The store used for deep research state: the configured directory, else the conventional one. */
+function storeDirectory(): string {
+  return webhookInboxDir() ?? join(getAgentDir(), CONVENTIONAL_WEBHOOK_INBOX_DIR);
+}
+
+/** Optional signed per-run callback. Deep research does not depend on it. */
 function configuredCallback(): string | undefined {
   const raw = process.env.PIPARA_WEBHOOK_URL?.trim();
-  if (!raw || !webhookInboxDir()) return undefined;
+  if (!raw) return undefined;
   try {
     const url = new URL(raw);
     return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.hash ? raw : undefined;
@@ -49,6 +55,7 @@ type Runtime = {
   session: ResearchSession;
   inbox?: WebhookInbox;
   consumer?: WebhookConsumer;
+  collector?: OutboundCollector;
   released: boolean;
 };
 
@@ -60,7 +67,9 @@ export default function piWebtasks(pi: ExtensionAPI) {
     if (!outgoing) return;
     try {
       // Tracked work persists its uncertain outcome while the store is still open.
+      // Collector before consumer: no new entries arrive while the consumer drains, and nothing writes after the store closes.
       await outgoing.session.stop();
+      await outgoing.collector?.stop();
       await outgoing.consumer?.stop();
     } finally {
       outgoing.released = true;
@@ -110,12 +119,10 @@ export default function piWebtasks(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     await stopRuntime();
-    const dir = webhookInboxDir();
     const sessionId = ctx.sessionManager.getSessionId();
-    // The configured shared directory, else the conventional existing store. Startup records
-    // this session locally, warms the group cache, and attaches recovery. It never creates a
-    // remote group or sends any request.
-    const storeDir = dir ?? join(getAgentDir(), CONVENTIONAL_WEBHOOK_INBOX_DIR);
+    // Startup records this session locally, warms the group cache, and attaches recovery. It never
+    // creates a remote group or sends any request. The collector starts only with a ready group.
+    const storeDir = storeDirectory();
     const runtime: Runtime = { sessionId, released: false, session: undefined as never };
     runtime.session = new ResearchSession({
       sessionId,
@@ -125,6 +132,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
       },
       getClient: researchClient,
       webhookUrl: configuredCallback(),
+      onSubmitted: () => { runtime.collector?.start(); runtime.collector?.wake(); },
     });
     rt = runtime;
     const inbox = runtime.inbox = new WebhookInbox(storeDir);
@@ -145,12 +153,23 @@ export default function piWebtasks(pi: ExtensionAPI) {
       onLog: msg => { if (ctx.hasUI) ctx.ui.notify(msg, "warning"); },
     });
     await inbox.prune().catch(() => {});
-    // Arm the watcher before the startup pass so a callback between them is not stranded.
-    runtime.consumer.start(() => {
+    const recover = () => {
       webhookRecoveryPass(ctx).catch(err => {
         if (ctx.hasUI) ctx.ui.notify(`Research recovery failed: ${formatError(err)}`, "warning");
       });
+    };
+    runtime.collector = new OutboundCollector({
+      session: runtime.session,
+      onRecorded: recover,
+      onLog: msg => { if (ctx.hasUI) ctx.ui.notify(msg, "warning"); },
     });
+    // Arm the watcher before the startup pass so a callback between them is not stranded.
+    runtime.consumer.start(recover);
+    if (runtime.session.group) {
+      // Startup reconciliation: pending runs, including those that settled while Pi was closed.
+      runtime.collector.start();
+      runtime.collector.wake();
+    }
     await webhookRecoveryPass(ctx);
   });
 
@@ -161,11 +180,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
   pi.registerCommand("parallel-webhook", {
     description: "Parallel webhook: show pending/registered state, or force a recovery pass",
     handler: async (args, ctx) => {
-      const dir = webhookInboxDir();
-      if (!dir) {
-        ctx.ui.notify(`Webhook integration is opt-in and inactive. Set ${WEBHOOK_DIR_ENV} and restart the session to enable it; run the receiver separately with \`npm run webhook:receiver\` (see docs/webhook-integration.md).`, "info");
-        return;
-      }
+      const dir = storeDirectory();
       const sub = args.trim();
       if (sub === "recover" || sub === "") {
         // Explicit command only: retries entries whose one-shot fetch

@@ -185,6 +185,7 @@ test("presentation failure falls back to the saved JSON receipt without losing i
 
 test("web_search query and URL paths switch presentation without changing requests, schemas or raw results", async t => {
   const h = await setup(t, () => new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } }));
+  await h.start(); // research tools are available only inside a started session
   for (const [name, args] of [["web_search", { query: "official policy" }], ["web_search", { urls: [source.url] }]] as const) {
     const tool = h.tools.get(name);
     const schema = JSON.stringify(tool.parameters);

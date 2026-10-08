@@ -87,6 +87,10 @@ function deadlineFor(parent: AbortSignal, ms: number): Deadline {
     clear: () => {
       clearTimeout(timer);
       parent.removeEventListener("abort", forward);
+      // Release the request whether or not anything consumed it. The SDK aborts an SSE body only from its
+      // iterator's finally, so an opened but unconsumed body would otherwise stay open. This reason is not
+      // a deadline: expired() reads only the timer's flag, so the release is never taken for an expiry.
+      if (!own.signal.aborted) own.abort(new Error("request released"));
     },
   };
 }
@@ -332,7 +336,7 @@ export class OutboundCollector {
       const cursorMoved = cursorNow !== (resumeFrom ?? null);
       return { progress: insertedRows > 0 || cursorMoved };
     } finally {
-      connection.clear(); // releases the HTTP stream on every exit path
+      connection.clear(); // releases the request on every exit path, consumed or not
     }
   }
 
@@ -360,7 +364,7 @@ export class OutboundCollector {
       if (snap.expired() && !this.stopped) throw new Error("Task group snapshot timed out", { cause: err });
       throw err;
     } finally {
-      snap.clear();
+      snap.clear(); // releases the snapshot request on every exit path, consumed or not
     }
   }
 

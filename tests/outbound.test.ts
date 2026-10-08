@@ -474,6 +474,55 @@ test("a connection that advances the stored cursor resets the backoff to the 1 s
   assert.equal((await inbox.getSessionGroup(SESSION))!.event_cursor, "e2");
 });
 
+test("the events request is released after a pass whose snapshot failed, before anything consumes it", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("80"), "run_80");
+  const sleeps: number[] = [];
+  const fake = fakeClient(() => stream([]), () => { throw new Error("connection reset"); });
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  try {
+    await waitFor(() => sleeps.length >= 1);
+    // Checked before stop(): this proves the pass itself released the open, unconsumed stream.
+    const events = fake.calls.find(c => c.kind === "events")!;
+    assert.equal(events.signal!.aborted, true, "the opened events request was released when the pass threw");
+  } finally {
+    await collector.stop();
+  }
+});
+
+test("the events request is released after a pass that ends early because the snapshot left no work", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("81"));
+  const fake = fakeClient(() => stream([]));
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep([]), random: () => 0 });
+  collector.start();
+  try {
+    await waitFor(() => fake.calls.some(c => c.kind === "snapshot"));
+    await delay(60);
+    const events = fake.calls.find(c => c.kind === "events")!;
+    assert.equal(events.signal!.aborted, true, "the events request opened for an idle pass was released");
+  } finally {
+    await collector.stop();
+  }
+});
+
+test("the snapshot request is released when a snapshot completes", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("82"), "run_82");
+  const sleeps: number[] = [];
+  const fake = fakeClient(() => stream([]), () => stream([]));
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  try {
+    await waitFor(() => sleeps.length >= 1);
+    const snapshot = fake.calls.find(c => c.kind === "snapshot")!;
+    assert.equal(snapshot.signal!.aborted, true, "the snapshot request was released on its exit path");
+  } finally {
+    await collector.stop();
+  }
+});
+
 // -------------------------------------------------- end to end through Pi's loader
 
 type TaskGroupState = { script: unknown[]; snapshotStatus: string; submitted: any[]; results: number; lastIds: (string | null)[] };

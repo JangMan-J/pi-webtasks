@@ -1,0 +1,320 @@
+{
+ "format": "saved-research-result",
+ "version": 1,
+ "status": "complete",
+ "saved_utc": "2026-09-20T10:14:52Z",
+ "unrelated_public_metadata": [
+  {
+   "registry_entry": 0,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "GET",
+   "reference": "RFC 9110 section 9.3.1",
+   "summary": "retrieves a representation of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 1,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "HEAD",
+   "reference": "RFC 9110 section 9.3.2",
+   "summary": "like GET but transfers status line and headers only",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 2,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "POST",
+   "reference": "RFC 9110 section 9.3.3",
+   "summary": "requests that the target resource process the enclosed representation",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 3,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PUT",
+   "reference": "RFC 9110 section 9.3.4",
+   "summary": "creates or replaces the state of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 4,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "DELETE",
+   "reference": "RFC 9110 section 9.3.5",
+   "summary": "requests removal of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 5,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "CONNECT",
+   "reference": "RFC 9110 section 9.3.6",
+   "summary": "establishes a tunnel to the authority server",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 6,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "OPTIONS",
+   "reference": "RFC 9110 section 9.3.7",
+   "summary": "describes communication options for the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 7,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "TRACE",
+   "reference": "RFC 9110 section 9.3.8",
+   "summary": "performs a message loop-back test along the request path",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 8,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PATCH",
+   "reference": "RFC 5789",
+   "summary": "applies partial modifications to a resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 9,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "QUERY",
+   "reference": "IETF draft-ietf-httpbis-safe-method-w-body",
+   "summary": "performs a safe, idempotent query with a request body",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 10,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "GET",
+   "reference": "RFC 9110 section 9.3.1",
+   "summary": "retrieves a representation of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 11,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "HEAD",
+   "reference": "RFC 9110 section 9.3.2",
+   "summary": "like GET but transfers status line and headers only",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 12,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "POST",
+   "reference": "RFC 9110 section 9.3.3",
+   "summary": "requests that the target resource process the enclosed representation",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 13,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PUT",
+   "reference": "RFC 9110 section 9.3.4",
+   "summary": "creates or replaces the state of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 14,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "DELETE",
+   "reference": "RFC 9110 section 9.3.5",
+   "summary": "requests removal of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 15,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "CONNECT",
+   "reference": "RFC 9110 section 9.3.6",
+   "summary": "establishes a tunnel to the authority server",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 16,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "OPTIONS",
+   "reference": "RFC 9110 section 9.3.7",
+   "summary": "describes communication options for the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 17,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "TRACE",
+   "reference": "RFC 9110 section 9.3.8",
+   "summary": "performs a message loop-back test along the request path",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 18,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PATCH",
+   "reference": "RFC 5789",
+   "summary": "applies partial modifications to a resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 19,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "QUERY",
+   "reference": "IETF draft-ietf-httpbis-safe-method-w-body",
+   "summary": "performs a safe, idempotent query with a request body",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 20,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "GET",
+   "reference": "RFC 9110 section 9.3.1",
+   "summary": "retrieves a representation of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 21,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "HEAD",
+   "reference": "RFC 9110 section 9.3.2",
+   "summary": "like GET but transfers status line and headers only",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 22,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "POST",
+   "reference": "RFC 9110 section 9.3.3",
+   "summary": "requests that the target resource process the enclosed representation",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 23,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PUT",
+   "reference": "RFC 9110 section 9.3.4",
+   "summary": "creates or replaces the state of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 24,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "DELETE",
+   "reference": "RFC 9110 section 9.3.5",
+   "summary": "requests removal of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 25,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "CONNECT",
+   "reference": "RFC 9110 section 9.3.6",
+   "summary": "establishes a tunnel to the authority server",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 26,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "OPTIONS",
+   "reference": "RFC 9110 section 9.3.7",
+   "summary": "describes communication options for the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 27,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "TRACE",
+   "reference": "RFC 9110 section 9.3.8",
+   "summary": "performs a message loop-back test along the request path",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 28,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PATCH",
+   "reference": "RFC 5789",
+   "summary": "applies partial modifications to a resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 29,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "QUERY",
+   "reference": "IETF draft-ietf-httpbis-safe-method-w-body",
+   "summary": "performs a safe, idempotent query with a request body",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 30,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "GET",
+   "reference": "RFC 9110 section 9.3.1",
+   "summary": "retrieves a representation of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 31,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "HEAD",
+   "reference": "RFC 9110 section 9.3.2",
+   "summary": "like GET but transfers status line and headers only",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 32,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "POST",
+   "reference": "RFC 9110 section 9.3.3",
+   "summary": "requests that the target resource process the enclosed representation",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 33,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "PUT",
+   "reference": "RFC 9110 section 9.3.4",
+   "summary": "creates or replaces the state of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 34,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "DELETE",
+   "reference": "RFC 9110 section 9.3.5",
+   "summary": "requests removal of the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 35,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "CONNECT",
+   "reference": "RFC 9110 section 9.3.6",
+   "summary": "establishes a tunnel to the authority server",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 36,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "OPTIONS",
+   "reference": "RFC 9110 section 9.3.7",
+   "summary": "describes communication options for the target resource",
+   "note": "Padding record carrying no answer content."
+  },
+  {
+   "registry_entry": 37,
+   "registry": "IANA HTTP Method Registry (public metadata, unrelated to the research question)",
+   "method": "TRACE",
+   "reference": "RFC 9110 section 9.3.8",
+   "summary": "performs a message loop-back test along the request path",
+   "note": "Padding record carrying no answer content."
+  }
+ ],
+ "result": {
+  "question": "According to the official Node.js release schedule, when does Node.js 22 reach end of life?",
+  "answer": "Node.js 22 reaches end of life on 2027-04-30.",
+  "release_line": "22.x",
+  "codename": "Jod",
+  "recorded_source": "https://github.com/nodejs/Release/blob/main/schedule.json",
+  "observed_utc": "2026-09-20T22:32:16Z"
+ }
+}

@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <title>PostgreSQL: Documentation: 16: 19.6. Upgrading a PostgreSQL Cluster</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta http-equiv="Content-Type" content="text/xhtml; charset=utf-8" />
+   
+  <meta name="theme-color" content="#336791"/>
+  <meta name="copyright" content="The PostgreSQL Global Development Group" />
+  <meta property="og:url" content="https://www.postgresql.org/docs/16/upgrading.html" />
+  <meta property="og:type" content="article" />
+
+  <meta property="article:published_time" content="2026-08-13T12:52:44.176831" />
+  <meta property="og:image" content="https://www.postgresql.org/media/img/about/press/elephant.png" />
+  <meta property="og:title" content="19.6. Upgrading a PostgreSQL Cluster" />
+  <meta property="og:description" content="19.6.&amp;nbsp;Upgrading a PostgreSQL Cluster # 19.6.1. Upgrading Data via pg_dumpall 19.6.2. Upgrading Data via pg_upgrade 19.6.3. Upgrading Data via Replication …" />
+  <meta property="og:site_name" content="PostgreSQL Documentation" />
+  <link href="/media/css/fontawesome.css?e5c079de" rel="stylesheet">
+  <link rel="stylesheet" href="/media/css/bootstrap-4.4.1.min.css">
+  <link rel="shortcut icon" href="/favicon.ico" />
+  
+  <link rel="stylesheet" type="text/css" href="/dyncss/base.css?e5c079de">
+
+  <script src="/media/js/theme.js?e5c079de"></script>
+
+  
+
+
+  <link rel="canonical" href="https://www.postgresql.org/docs/current/upgrading.html" />
+
+
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row justify-content-md-center">
+        <div class="col">
+          <!-- Header -->
+          <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <a class="navbar-brand p-0" href="/">
+              <img class="logo" src="/media/img/about/press/elephant.png" alt="PostgreSQL Elephant Logo">
+            </a>
+            <input type="checkbox" id="navbar-toggler" aria-controls="pgNavbar" aria-expanded="false" aria-label="Toggle navigation">
+            <label for="navbar-toggler" id="navbar-toggler-label" class="navbar-toggler" tabindex="0"><span class="navbar-toggler-icon"></span></label>
+            <div class="navbar-collapse" id="pgNavbar">
+              <ul class="navbar-nav mr-auto">
+                <li class="nav-item p-2"><a href="/" title="Home">Home</a></li>
+                <li class="nav-item p-2"><a href="/about/" title="About">About</a></li>
+                <li class="nav-item p-2"><a href="/download/" title="Download">Download</a></li>
+                <li class="nav-item p-2"><a href="/docs/" title="Documentation">Documentation</a></li>
+                <li class="nav-item p-2"><a href="/community/" title="Community">Community</a></li>
+                <li class="nav-item p-2"><a href="/developer/" title="Developers">Developers</a></li>
+                <li class="nav-item p-2"><a href="/support/" title="Support">Support</a></li>
+                <li class="nav-item p-2"><a href="/about/donate/" title="Donate">Donate</a></li>
+                <li class="nav-item p-2"><a href="/account/" title="Your account">Your account</a></li>
+              </ul>
+              <form role="search" method="get" action="/search/">
+                <div class="input-group">
+                  <input id="q" name="q" type="text" size="20" maxlength="255" accesskey="s"  class="form-control" placeholder="Search for...">
+                  <span class="input-group-btn">
+                    <button class="btn btn-default" type="submit"><i class="fas fa-search"></i></button>
+                  </span>
+                </div><!-- /input-group -->
+              </form>
+              <form id="form-theme" class="form-inline d-none">
+                <button id="btn-theme" class="btn btn-default ml-1" type="button"></button>
+              </form>
+            </div>
+          </nav>
+        </div>
+      </div>
+      <div class="row justify-content-center pg-shout-box">
+        <div class="col text-white text-center">August 13, 2026: <a href="/about/news/postgresql-186-1711-1615-1519-1424-and-19-beta-3-released-3365/">PostgreSQL 18.6, 17.11, 16.15, 15.19, 14.24 and 19 Beta 3 Released!</a>
+
+</div>
+      </div>
+    </div>
+    
+    <div class="container-fluid margin">
+      <div class="row">
+        <div id="pgContentWrap" class="col-11">
+          <div class="row">
+            <div class="col-md-6 mb-2">
+              <div class="row">
+                <div class="col">
+                  <div>
+                    <a href="/docs/" title="Documentation">Documentation</a> &rarr; <a href="/docs/16/index.html">PostgreSQL 16</a>
+                  </div>
+                </div>
+              </div>
+              
+                <div class="row">
+                  <div class="col">
+                    Supported Versions:
+                      
+                        
+                        
+                          <a href="/docs/current/upgrading.html" title="PostgreSQL 18 - 19.6. Upgrading a PostgreSQL Cluster" >Current</a>
+                          (<a href="/docs/18/upgrading.html" title="PostgreSQL 18 - 19.6. Upgrading a PostgreSQL Cluster" >18</a>)
+                        
+                      
+                         / 
+                        
+                          <a href="/docs/17/upgrading.html" title="PostgreSQL 17 - 19.6. Upgrading a PostgreSQL Cluster" >17</a>
+                        
+                      
+                         / 
+                        
+                          <a href="/docs/16/upgrading.html" title="PostgreSQL 16 - 19.6. Upgrading a PostgreSQL Cluster" class="docs-version-selected">16</a>
+                        
+                      
+                         / 
+                        
+                          <a href="/docs/15/upgrading.html" title="PostgreSQL 15 - 19.6. Upgrading a PostgreSQL Cluster" >15</a>
+                        
+                      
+                         / 
+                        
+                          <a href="/docs/14/upgrading.html" title="PostgreSQL 14 - 19.6. Upgrading a PostgreSQL Cluster" >14</a>
+                        
+                      
+                  </div>
+                </div>
+              
+              
+                <div class="row">
+                  <div class="col">
+                    Development Versions:
+                    
+                      
+                      <a href="/docs/19/upgrading.html" title="PostgreSQL 19 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">19</a>
+                    
+                       / 
+                      <a href="/docs/devel/upgrading.html" title="PostgreSQL devel - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">devel</a>
+                    
+                  </div>
+                </div>
+              
+              
+                <div class="row">
+                  <div class="col-12">
+                    Unsupported versions:
+                    
+                      
+                      <a href="/docs/13/upgrading.html" title="PostgreSQL 13 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">13</a>
+                    
+                       / 
+                      <a href="/docs/12/upgrading.html" title="PostgreSQL 12 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">12</a>
+                    
+                       / 
+                      <a href="/docs/11/upgrading.html" title="PostgreSQL 11 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">11</a>
+                    
+                       / 
+                      <a href="/docs/10/upgrading.html" title="PostgreSQL 10 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">10</a>
+                    
+                       / 
+                      <a href="/docs/9.6/upgrading.html" title="PostgreSQL 9.6 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.6</a>
+                    
+                       / 
+                      <a href="/docs/9.5/upgrading.html" title="PostgreSQL 9.5 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.5</a>
+                    
+                       / 
+                      <a href="/docs/9.4/upgrading.html" title="PostgreSQL 9.4 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.4</a>
+                    
+                       / 
+                      <a href="/docs/9.3/upgrading.html" title="PostgreSQL 9.3 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.3</a>
+                    
+                       / 
+                      <a href="/docs/9.2/upgrading.html" title="PostgreSQL 9.2 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.2</a>
+                    
+                       / 
+                      <a href="/docs/9.1/upgrading.html" title="PostgreSQL 9.1 - 19.6. Upgrading a PostgreSQL Cluster"  rel="nofollow">9.1</a>
+                    
+                  </div>
+                </div>
+              
+            </div>
+            <div class="col-md-6 col-lg-5 offset-lg-1">
+              <form id="docSearchForm" role="search" method="get" action="/search/">
+                <input type="hidden" name="u" value="/docs/16/" />
+                <div class="input-group">
+                  <input type="text" id="q" name="q" class="form-control" placeholder="Search the documentation for..."/>
+                  <span class="input-group-btn">
+                    <button class="btn btn-default" type="submit"><i class="fas fa-search"></i></button>
+                  </span>
+                </div><!-- /input-group -->
+              </form>
+            </div>
+          </div>
+
+          <div id="docContent">
+            <div class="navheader">
+  <table width="100%" summary="Navigation header">
+    <tr>
+      <th colspan="5" align="center">19.6.&nbsp;Upgrading a <span class="productname">PostgreSQL</span> Cluster</th>
+    </tr>
+    <tr>
+      <td width="10%" align="left"><a accesskey="p" href="server-shutdown.html" title="19.5.&nbsp;Shutting Down the Server">Prev</a>&nbsp;</td>
+      <td width="10%" align="left"><a accesskey="u" href="runtime.html" title="Chapter&nbsp;19.&nbsp;Server Setup and Operation">Up</a></td>
+      <th width="60%" align="center">Chapter&nbsp;19.&nbsp;Server Setup and Operation</th>
+      <td width="10%" align="right"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+      <td width="10%" align="right">&nbsp;<a accesskey="n" href="preventing-server-spoofing.html" title="19.7.&nbsp;Preventing Server Spoofing">Next</a></td>
+    </tr>
+  </table>
+  <hr />
+</div>
+<div class="sect1" id="UPGRADING">
+  <div class="titlepage">
+    <div>
+      <div>
+        <h2 class="title" style="clear: both">19.6.&nbsp;Upgrading a <span class="productname">PostgreSQL</span> Cluster <a href="#UPGRADING" class="id_link">#</a></h2>
+      </div>
+    </div>
+  </div>
+  <div class="toc">
+    <dl class="toc">
+      <dt><span class="sect2"><a href="upgrading.html#UPGRADING-VIA-PGDUMPALL">19.6.1. Upgrading Data via <span class="application">pg_dumpall</span></a></span></dt>
+      <dt><span class="sect2"><a href="upgrading.html#UPGRADING-VIA-PG-UPGRADE">19.6.2. Upgrading Data via <span class="application">pg_upgrade</span></a></span></dt>
+      <dt><span class="sect2"><a href="upgrading.html#UPGRADING-VIA-REPLICATION">19.6.3. Upgrading Data via Replication</a></span></dt>
+    </dl>
+  </div><a id="id-1.6.6.9.2" class="indexterm" name="id-1.6.6.9.2"></a><a id="id-1.6.6.9.3" class="indexterm" name="id-1.6.6.9.3"></a>
+  <p>This section discusses how to upgrade your database data from one <span class="productname">PostgreSQL</span> release to a newer one.</p>
+  <p>Current <span class="productname">PostgreSQL</span> version numbers consist of a major and a minor version number. For example, in the version number 10.1, the 10 is the major version number and the 1 is the minor version number, meaning this would be the first minor release of the major release 10. For releases before <span class="productname">PostgreSQL</span> version 10.0, version numbers consist of three numbers, for example, 9.5.3. In those cases, the major version consists of the first two digit groups of the version number, e.g., 9.5, and the minor version is the third number, e.g., 3, meaning this would be the third minor release of the major release 9.5.</p>
+  <p>Minor releases never change the internal storage format and are always compatible with earlier and later minor releases of the same major version number. For example, version 10.1 is compatible with version 10.0 and version 10.6. Similarly, for example, 9.5.3 is compatible with 9.5.0, 9.5.1, and 9.5.6. To update between compatible versions, you simply replace the executables while the server is down and restart the server. The data directory remains unchanged — minor upgrades are that simple.</p>
+  <p>For <span class="emphasis"><em>major</em></span> releases of <span class="productname">PostgreSQL</span>, the internal data storage format is subject to change, thus complicating upgrades. The traditional method for moving data to a new major version is to dump and restore the database, though this can be slow. A faster method is <a class="xref" href="pgupgrade.html" title="pg_upgrade"><span class="refentrytitle"><span class="application">pg_upgrade</span></span></a>. Replication methods are also available, as discussed below. (If you are using a pre-packaged version of <span class="productname">PostgreSQL</span>, it may provide scripts to assist with major version upgrades. Consult the package-level documentation for details.)</p>
+  <p>New major versions also typically introduce some user-visible incompatibilities, so application programming changes might be required. All user-visible changes are listed in the release notes (<a class="xref" href="release.html" title="Appendix&nbsp;E.&nbsp;Release Notes">Appendix&nbsp;E</a>); pay particular attention to the section labeled "Migration". Though you can upgrade from one major version to another without upgrading to intervening versions, you should read the major release notes of all intervening versions.</p>
+  <p>Cautious users will want to test their client applications on the new version before switching over fully; therefore, it's often a good idea to set up concurrent installations of old and new versions. When testing a <span class="productname">PostgreSQL</span> major upgrade, consider the following categories of possible changes:</p>
+  <div class="variablelist">
+    <dl class="variablelist">
+      <dt><span class="term">Administration</span></dt>
+      <dd>
+        <p>The capabilities available for administrators to monitor and control the server often change and improve in each major release.</p>
+      </dd>
+      <dt><span class="term">SQL</span></dt>
+      <dd>
+        <p>Typically this includes new SQL command capabilities and not changes in behavior, unless specifically mentioned in the release notes.</p>
+      </dd>
+      <dt><span class="term">Library API</span></dt>
+      <dd>
+        <p>Typically libraries like <span class="application">libpq</span> only add new functionality, again unless mentioned in the release notes.</p>
+      </dd>
+      <dt><span class="term">System Catalogs</span></dt>
+      <dd>
+        <p>System catalog changes usually only affect database management tools.</p>
+      </dd>
+      <dt><span class="term">Server C-language API</span></dt>
+      <dd>
+        <p>This involves changes in the backend function API, which is written in the C programming language. Such changes affect code that references backend functions deep inside the server.</p>
+      </dd>
+    </dl>
+  </div>
+  <div class="sect2" id="UPGRADING-VIA-PGDUMPALL">
+    <div class="titlepage">
+      <div>
+        <div>
+          <h3 class="title">19.6.1.&nbsp;Upgrading Data via <span class="application">pg_dumpall</span> <a href="#UPGRADING-VIA-PGDUMPALL" class="id_link">#</a></h3>
+        </div>
+      </div>
+    </div>
+    <p>One upgrade method is to dump data from one major version of <span class="productname">PostgreSQL</span> and restore it in another — to do this, you must use a <span class="emphasis"><em>logical</em></span> backup tool like <span class="application">pg_dumpall</span>; file system level backup methods will not work. (There are checks in place that prevent you from using a data directory with an incompatible version of <span class="productname">PostgreSQL</span>, so no great harm can be done by trying to start the wrong server version on a data directory.)</p>
+    <p>It is recommended that you use the <span class="application">pg_dump</span> and <span class="application">pg_dumpall</span> programs from the <span class="emphasis"><em>newer</em></span> version of <span class="productname">PostgreSQL</span>, to take advantage of enhancements that might have been made in these programs. Current releases of the dump programs can read data from any server version back to 9.2.</p>
+    <p>These instructions assume that your existing installation is under the <code class="filename">/usr/local/pgsql</code> directory, and that the data area is in <code class="filename">/usr/local/pgsql/data</code>. Substitute your paths appropriately.</p>
+    <div class="procedure">
+      <ol class="procedure" type="1">
+        <li class="step">
+          <p>If making a backup, make sure that your database is not being updated. This does not affect the integrity of the backup, but the changed data would of course not be included. If necessary, edit the permissions in the file <code class="filename">/usr/local/pgsql/data/pg_hba.conf</code> (or equivalent) to disallow access from everyone except you. See <a class="xref" href="client-authentication.html" title="Chapter&nbsp;21.&nbsp;Client Authentication">Chapter&nbsp;21</a> for additional information on access control.</p>
+          <p><a id="id-1.6.6.9.11.5.1.2.1" class="indexterm" name="id-1.6.6.9.11.5.1.2.1"></a> To back up your database installation, type:</p>
+          <pre class="screen">
+<strong class="userinput"><code>pg_dumpall &gt; <em class="replaceable"><code>outputfile</code></em></code></strong>
+</pre>
+          <p>To make the backup, you can use the <span class="application">pg_dumpall</span> command from the version you are currently running; see <a class="xref" href="backup-dump.html#BACKUP-DUMP-ALL" title="26.1.2.&nbsp;Using pg_dumpall">Section&nbsp;26.1.2</a> for more details. For best results, however, try to use the <span class="application">pg_dumpall</span> command from <span class="productname">PostgreSQL</span> 16.15, since this version contains bug fixes and improvements over older versions. While this advice might seem idiosyncratic since you haven't installed the new version yet, it is advisable to follow it if you plan to install the new version in parallel with the old version. In that case you can complete the installation normally and transfer the data later. This will also decrease the downtime.</p>
+        </li>
+        <li class="step">
+          <p>Shut down the old server:</p>
+          <pre class="screen">
+<strong class="userinput"><code>pg_ctl stop</code></strong>
+</pre>
+          <p>On systems that have <span class="productname">PostgreSQL</span> started at boot time, there is probably a start-up file that will accomplish the same thing. For example, on a <span class="systemitem">Red Hat Linux</span> system one might find that this works:</p>
+          <pre class="screen">
+<strong class="userinput"><code>/etc/rc.d/init.d/postgresql stop</code></strong>
+</pre>
+          <p>See <a class="xref" href="runtime.html" title="Chapter&nbsp;19.&nbsp;Server Setup and Operation">Chapter&nbsp;19</a> for details about starting and stopping the server.</p>
+        </li>
+        <li class="step">
+          <p>If restoring from backup, rename or delete the old installation directory if it is not version-specific. It is a good idea to rename the directory, rather than delete it, in case you have trouble and need to revert to it. Keep in mind the directory might consume significant disk space. To rename the directory, use a command like this:</p>
+          <pre class="screen">
+<strong class="userinput"><code>mv /usr/local/pgsql /usr/local/pgsql.old</code></strong>
+</pre>
+          <p>(Be sure to move the directory as a single unit so relative paths remain unchanged.)</p>
+        </li>
+        <li class="step">
+          <p>Install the new version of <span class="productname">PostgreSQL</span> as outlined in <a class="xref" href="installation.html" title="Chapter&nbsp;17.&nbsp;Installation from Source Code">Chapter&nbsp;17</a>.</p>
+        </li>
+        <li class="step">
+          <p>Create a new database cluster if needed. Remember that you must execute these commands while logged in to the special database user account (which you already have if you are upgrading).</p>
+          <pre class="programlisting">
+<strong class="userinput"><code>/usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data</code></strong>
+</pre>
+        </li>
+        <li class="step">
+          <p>Restore your previous <code class="filename">pg_hba.conf</code> and any <code class="filename">postgresql.conf</code> modifications.</p>
+        </li>
+        <li class="step">
+          <p>Start the database server, again using the special database user account:</p>
+          <pre class="programlisting">
+<strong class="userinput"><code>/usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data</code></strong>
+</pre>
+        </li>
+        <li class="step">
+          <p>Finally, restore your data from backup with:</p>
+          <pre class="screen">
+<strong class="userinput"><code>/usr/local/pgsql/bin/psql -d postgres -f <em class="replaceable"><code>outputfile</code></em></code></strong>
+</pre>
+          <p>using the <span class="emphasis"><em>new</em></span> <span class="application">psql</span>.</p>
+        </li>
+      </ol>
+    </div>
+    <p>The least downtime can be achieved by installing the new server in a different directory and running both the old and the new servers in parallel, on different ports. Then you can use something like:</p>
+    <pre class="programlisting">
+pg_dumpall -p 5432 | psql -d postgres -p 5433
+</pre>
+    <p>to transfer your data.</p>
+  </div>
+  <div class="sect2" id="UPGRADING-VIA-PG-UPGRADE">
+    <div class="titlepage">
+      <div>
+        <div>
+          <h3 class="title">19.6.2.&nbsp;Upgrading Data via <span class="application">pg_upgrade</span> <a href="#UPGRADING-VIA-PG-UPGRADE" class="id_link">#</a></h3>
+        </div>
+      </div>
+    </div>
+    <p>The <a class="xref" href="pgupgrade.html" title="pg_upgrade"><span class="refentrytitle"><span class="application">pg_upgrade</span></span></a> module allows an installation to be migrated in-place from one major <span class="productname">PostgreSQL</span> version to another. Upgrades can be performed in minutes, particularly with <code class="option">--link</code> mode. It requires steps similar to <span class="application">pg_dumpall</span> above, e.g., starting/stopping the server, running <span class="application">initdb</span>. The <span class="application">pg_upgrade</span> <a class="link" href="pgupgrade.html" title="pg_upgrade">documentation</a> outlines the necessary steps.</p>
+  </div>
+  <div class="sect2" id="UPGRADING-VIA-REPLICATION">
+    <div class="titlepage">
+      <div>
+        <div>
+          <h3 class="title">19.6.3.&nbsp;Upgrading Data via Replication <a href="#UPGRADING-VIA-REPLICATION" class="id_link">#</a></h3>
+        </div>
+      </div>
+    </div>
+    <p>It is also possible to use logical replication methods to create a standby server with the updated version of <span class="productname">PostgreSQL</span>. This is possible because logical replication supports replication between different major versions of <span class="productname">PostgreSQL</span>. The standby can be on the same computer or a different computer. Once it has synced up with the primary server (running the older version of <span class="productname">PostgreSQL</span>), you can switch primaries and make the standby the primary and shut down the older database instance. Such a switch-over results in only several seconds of downtime for an upgrade.</p>
+    <p>This method of upgrading can be performed using the built-in logical replication facilities as well as using external logical replication systems such as <span class="productname">pglogical</span>, <span class="productname">Slony</span>, <span class="productname">Londiste</span>, and <span class="productname">Bucardo</span>.</p>
+  </div>
+</div>
+<div class="navfooter">
+  <hr />
+  <table width="100%" summary="Navigation footer">
+    <tr>
+      <td width="40%" align="left"><a accesskey="p" href="server-shutdown.html" title="19.5.&nbsp;Shutting Down the Server">Prev</a>&nbsp;</td>
+      <td width="20%" align="center"><a accesskey="u" href="runtime.html" title="Chapter&nbsp;19.&nbsp;Server Setup and Operation">Up</a></td>
+      <td width="40%" align="right">&nbsp;<a accesskey="n" href="preventing-server-spoofing.html" title="19.7.&nbsp;Preventing Server Spoofing">Next</a></td>
+    </tr>
+    <tr>
+      <td width="40%" align="left" valign="top">19.5.&nbsp;Shutting Down the Server&nbsp;</td>
+      <td width="20%" align="center"><a accesskey="h" href="index.html" title="PostgreSQL 16.15 Documentation">Home</a></td>
+      <td width="40%" align="right" valign="top">&nbsp;19.7.&nbsp;Preventing Server Spoofing</td>
+    </tr>
+  </table>
+</div>
+
+          </div>
+          
+            <div id="docComments">
+              <h2>Submit correction</h2>
+              <p>
+              If you see anything in the documentation that is not correct, does not match
+              your experience with the particular feature or requires further clarification,
+              please use
+              <a href="/account/comments/new/16/upgrading.html/" rel="nofollow">this form</a>
+              to report a documentation issue.
+              </p>
+            </div>
+          
+        </div> <!-- pgContentWrap -->
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer id="footer">
+      <!-- Copyright -->
+      <div class="container">
+        <a href="/about/policies/">Policies</a> |
+        <a href="/about/policies/coc/">Code of Conduct</a> |
+        <a href="/about/">About PostgreSQL</a> |
+        <a href="/about/contact/">Contact</a><br/>
+        <p>Copyright &copy; 1996-2026 The PostgreSQL Global Development Group</p>
+      </div>
+    </footer>
+    <script src="/media/js/main.js?e5c079de"></script>
+
+  </body>
+</html>

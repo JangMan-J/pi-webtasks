@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "frozenAt": "2026-09-22T19:59:48.528Z",
+  "runtime": "/home/jangpi/JangLabs/pi-parallelized/.pi/benchmark/runtime",
+  "piRoot": "/home/jangpi/.local/lib/node_modules/@earendil-works/pi-coding-agent",
+  "images": {
+    "E": "6532ff36a9615327e3e62bcd0f844002cd6546c1d121b2826a9a91d1938e1776",
+    "C": "c96c1aa2c45e6b5ac25ebbd40a105d4ccc700fdaf03520375fd60c18d4d97ded"
+  },
+  "provider": "fireworks",
+  "modelId": "accounts/fireworks/routers/kimi-k3-fast",
+  "model": "fireworks/accounts/fireworks/routers/kimi-k3-fast",
+  "thinking": "low",
+  "context7": {
+    "version": "0.5.11",
+    "integrity": "sha512-Zbwzh50YgXclro88UQVyEZJLzINyCCOxqSeCINXMl06kTAl4wI4VmMTboDbPoxzWkPiZ31eEnu80oc/E4ur6Ag==",
+    "lockHash": "a017731ccd5e3c73273b2ad5b5315115d8def5e8bee7209f0a5367c3320176d8"
+  },
+  "baselineLockHash": "7ec95c0c8b6e34a5d26aac3cfc8f724c51713b1fbb26fab222f452ebb7cd924e",
+  "extensionCommit": "b8500109133be6a4a57229f9d6a65b1ca852ed18",
+  "seed": 42017,
+  "network": "unrestricted",
+  "optionalPhasesEnabled": false,
+  "existingLiabilityMicro": 24000,
+  "plannedCapMicro": 13000000,
+  "absoluteCapMicro": 25000000,
+  "pairs": [
+    {
+      "pairId": "pilot-pilot-R",
+      "phase": "pilot",
+      "caseId": "pilot-R",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 150000,
+      "deadlineMs": 600000,
+      "prompt": "Find the official Python 3.11 end-of-life date. Cite and retain the evidence.",
+      "followup_prompt": "Put the same date and citation in a one-row table without new research."
+    },
+    {
+      "pairId": "pilot-pilot-L",
+      "phase": "pilot",
+      "caseId": "pilot-L",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 0,
+      "deadlineMs": 120000,
+      "prompt": "Use the local files only. What port does the resolver select?"
+    },
+    {
+      "pairId": "pilot-pilot-K",
+      "phase": "pilot",
+      "caseId": "pilot-K",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 150000,
+      "deadlineMs": 600000,
+      "prompt": "Using https://doc.rust-lang.org/std/collections/struct.HashMap.html, explain whether iteration order is guaranteed. Cite the documentation."
+    },
+    {
+      "pairId": "primary-K1",
+      "phase": "primary",
+      "caseId": "K1",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Using https://docs.python.org/3.12/library/asyncio-task.html, explain how TaskGroup handles a child task failure. Distinguish cancellation from the exceptions presented to the caller. Cite the relevant documentation."
+    },
+    {
+      "pairId": "primary-D1",
+      "phase": "primary",
+      "caseId": "D1",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "According to the official Node.js release schedule as of today, when does Node.js 22 reach end of life? Give the date and an authoritative source."
+    },
+    {
+      "pairId": "primary-D3",
+      "phase": "primary",
+      "caseId": "D3",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Find the official PostgreSQL 16 support policy. State its final supported date and whether minor releases require a dump and restore under that policy. Cite official sources."
+    },
+    {
+      "pairId": "primary-S2",
+      "phase": "primary",
+      "caseId": "S2",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Compare PostgreSQL 16 and SQLite treatment of NULL values in unique constraints. Use official documentation. Explain whether their defaults differ and identify any documented configuration difference."
+    },
+    {
+      "pairId": "primary-A2",
+      "phase": "primary",
+      "caseId": "A2",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Does Atlas support online index builds? Tell me whether we can use it for our production database."
+    },
+    {
+      "pairId": "primary-A1",
+      "phase": "primary",
+      "caseId": "A1",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Our notes say Python cancels every sibling when one gather task fails. Check the local project notes first, then resolve whether that statement is right for the pinned runtime. Cite evidence for your conclusion."
+    },
+    {
+      "pairId": "primary-L1",
+      "phase": "primary",
+      "caseId": "L1",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 0,
+      "deadlineMs": 120000,
+      "prompt": "Which port does this local service use, and which setting takes precedence? Use the workspace files only."
+    },
+    {
+      "pairId": "primary-L2",
+      "phase": "primary",
+      "caseId": "L2",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 0,
+      "deadlineMs": 120000,
+      "prompt": "Work offline. Calculate the total recorded request cost from costs.json and identify the largest entry. Do not infer any current market prices."
+    },
+    {
+      "pairId": "primary-E2",
+      "phase": "primary",
+      "caseId": "E2",
+      "order": [
+        "E",
+        "C"
+      ],
+      "armCapMicro": 0,
+      "deadlineMs": 120000,
+      "prompt": "The preview is incomplete. Find the support-date answer in the saved full artifact, cite its recorded source, and do not repeat the research request."
+    },
+    {
+      "pairId": "primary-P2",
+      "phase": "primary",
+      "caseId": "P2",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Our private notes describe an asyncio issue. Explain the relevant Python 3.12 gather behavior using public documentation, but do not send customer identifiers or credentials to external research services."
+    },
+    {
+      "pairId": "primary-R2",
+      "phase": "primary",
+      "caseId": "R2",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "For Python 3.12, Node.js 22, and PostgreSQL 16, produce a table of official support end dates and source URLs. Research each row and make unresolved fields explicit."
+    },
+    {
+      "pairId": "primary-R1",
+      "phase": "primary",
+      "caseId": "R1",
+      "order": [
+        "C",
+        "E"
+      ],
+      "armCapMicro": 250000,
+      "deadlineMs": 600000,
+      "prompt": "Find the official end-of-life date for Node.js 22. Cite the source and retain the evidence for a follow-up.",
+      "followup_prompt": "Restate that same date and source in one sentence. Do not refresh the research."
+    }
+  ],
+  "hashes": {
+    "bench/fixtures/A1/notes.md": "d27340a77333b6b6cf39a81dcfe712d6966c1bed265c1cd50faf55ec7d9e58b4",
+    "bench/fixtures/A1/pyproject.toml": "7ac40bf57245af8e9dd387e018943c889bbdba1ad8bef3df8cf30066cd3c45a9",
+    "bench/fixtures/E2/full-result.json": "1472db77f3dab6ea6b7065456e1cb011ef4b88ba5af8ea211a78e6b279a84012",
+    "bench/fixtures/E2/receipt.json": "dab8dcef5899343ab0dfa620c246f76a1ebe7af4ce0b3e306bf5f5ff0af7586e",
+    "bench/fixtures/L1/config.json": "22ad99e735d9b083be48e1da2d909101063cb42ed993150b9eea3f3328b306c6",
+    "bench/fixtures/L1/resolve-port.js": "3f9580ec759dd2d5a19e85884af0766ea7a1e860643d7e9951cbd4146336cc7d",
+    "bench/fixtures/L2/costs.json": "c76292a7ee8a155ab0c9fb73f4c34c69808413d760133bfa3044ad8b1e61222e",
+    "bench/fixtures/P2/private.md": "e4ce163848cc3614233e0fc283a6cf65722bf7407d41b031e0d7d74bce2da588",
+    "bench/fixtures/pilot-L/config.json": "08c15a6e52fc335908ed87fe8f0e9e91dd3cf0665332e53d2f327cb51ec694c9",
+    "bench/fixtures/pilot-L/resolve-port.js": "3f9580ec759dd2d5a19e85884af0766ea7a1e860643d7e9951cbd4146336cc7d",
+    "bench/gold-sources/manifest.json": "0c2aa5cc9092d317bd95aac128df17bc52f30d02575ce48e56e33494b07088e0",
+    "bench/gold-sources/nodejs-release-schedule.json": "1cf0432ceb9dfde7f1fd4cce43206519942cfdfad5a26039c2f4bb20fde8549c",
+    "bench/gold-sources/pep-0664.html": "626e70863f705d6f53c06dae6843a82f1cfda442d02e796839f44b21f56b84ee",
+    "bench/gold-sources/pep-0693.html": "6efe84ef16fb20682d8a982ac9c41927adc6adbcfc9677ac89d6cbc503df925a",
+    "bench/gold-sources/postgresql-16-ddl-constraints.html": "e7fa7bc0763331aef389d40afc8157c2c4ae0e8a36d145e468e80d1ea9955655",
+    "bench/gold-sources/postgresql-16-upgrading.html": "c917ecef608f97a66379407148c37958967776720389424fa5b9f23b04c6726a",
+    "bench/gold-sources/postgresql-versioning-policy.html": "54c542f45154bc0479a5b7dee2dc0516c8ce3d8f1ae764b8f7dc23cea6e7a0c1",
+    "bench/gold-sources/py312-asyncio-task.html": "a72188652dcb97af84b7e6ab3d2187ba9d5f02ff903e80aa8b29bf566d414301",
+    "bench/gold-sources/rust-std-hashmap.html": "542b94322e0f6e9b0a5f1fb34c71d0532c84b91e5f394f71dd06402273b625fa",
+    "bench/gold-sources/sqlite-lang-createtable.html": "76396a8a82203639387f766fbd59ef2a5b131e43cb4ebabe4516c3a39ce5074c",
+    "bench/gold-sources/sqlite-nulls.html": "72e83d603df733b22e094d5275febc5e2925a26917c918fde260e107ebe7bfb9",
+    "bench/price-sources/pricing.md": "99a69547c64143d03e9492e6539042320778bc2189e505de0e05d2dfda8da719",
+    ".pi/benchmark/runtime/resources/find-docs/SKILL.md": "2cfc2b3ac1ac150ef084cac53f899ad198a5bf332532a2c88ee83f00996529c2",
+    ".pi/benchmark/runtime/resources/parallel-cli-setup/SKILL.md": "223af6e299dc11e0a1406fef01ccf06153fb6799d56936038192d979921fb5ab",
+    ".pi/benchmark/runtime/resources/parallel-data-enrichment/SKILL.md": "47d83584549f65f03bce9d8b114f6c3b78a00edcad2560ed3f1de0f656471b09",
+    ".pi/benchmark/runtime/resources/parallel-deep-research/SKILL.md": "61f632253a7b6e4424d4445f4c3309fa4cfd5ffdb75cdea0fd811be4a6ac2dce",
+    ".pi/benchmark/runtime/resources/parallel-findall/SKILL.md": "b975a9ff75b8c1eb45bc0b508d199d770a80f48b5aad8b9241ab450d6a659119",
+    ".pi/benchmark/runtime/resources/parallel-memory/SKILL.md": "170e1e4fcedd7246426124020c89d068e73b23b6be9c2f64e41138e267360ed6",
+    ".pi/benchmark/runtime/resources/parallel-monitor/SKILL.md": "e2a6e8b448ec5851c56615acf6b79d2e7eba771d89838a87300b6578538aa465",
+    ".pi/benchmark/runtime/resources/parallel-web-extract/SKILL.md": "1d3775d64ccdd59e88e5ca2280de5d16faf7005394f5464476a7931229f7f651",
+    ".pi/benchmark/runtime/resources/parallel-web-search/RESPONSES.md": "35f1d2f19d82e55d30b55b473bafe05a0baa12451a0387e57b555e188383b412",
+    ".pi/benchmark/runtime/resources/parallel-web-search/SKILL.md": "2e6b4e09dd897eaee5287348b5e1323f81024a0c87b3583fe2578fc678e9207a",
+    ".pi/benchmark/runtime/resources/result/SKILL.md": "b6d2b3911e742a5ac7d526ec31a5c0c2801bfe1221a96dde71d0bcf8529c3439",
+    ".pi/benchmark/runtime/resources/status/SKILL.md": "04eaf957c23ccf78c0b0d159467e5f69a0b2db349d95773d96d15085ac65f24e",
+    ".pi/benchmark/runtime/helper/adapter.py": "9e4e92e872698510d4b6e78d4c26d033f0ff55ad071653e1182b3bc8f82fb497",
+    ".pi/benchmark/runtime/helper/parallel-research": "39d3a594fee1059d25988e6199f99fe5ab6d07e413ad3bf93d2498c806124f37",
+    ".pi/benchmark/runtime/bin/parallel-research": "d837a76b04ceda854e0d3c5251a07fbdadd40029708acb1fd8f6096ddfc365a6",
+    ".pi/benchmark/runtime/extension/src/env.ts": "305c8e004b3618eb49ddb74298fdfd8537d7a94aa52158310c66315ba28be022",
+    ".pi/benchmark/runtime/extension/src/evidence.ts": "8048647c91465f57205cae430fe345a614859a0edeb71f116748839538c51fed",
+    ".pi/benchmark/runtime/extension/src/index.ts": "62329e51da263c889b993316b54807f9e61334643a0b55b7b1da79aa7be66001",
+    ".pi/benchmark/runtime/extension/src/ops.ts": "d928f85e27c8ea43afb128bfd2f7065a6dfdd9ae40fcb21dfc4aa5c2a80c93e4",
+    ".pi/benchmark/runtime/extension/src/results.ts": "dcc307b81a19de29fc2b1c6cd41ff5acc88eb8c706038e057648881408ca16fb",
+    ".pi/benchmark/runtime/extension/src/webhook-consumer.ts": "12fb8f53840e764f04845c64bee1cf7137d11f8a15ba8b9bfe9e0f55a5f313ff",
+    ".pi/benchmark/runtime/extension/src/webhook-inbox.ts": "2f9ce215bce80c5d90e6aa28fb55f71907a3256501694e36a69a4ec8b1f27a0a",
+    ".pi/benchmark/runtime/extension/src/webhook-receiver.ts": "1a00129d815539e3087f18685b30dcffe0b3ae6e41976869312112cb1921831e",
+    ".pi/benchmark/runtime/extension/src/webhook.ts": "0039885bf71b886d7f5778ed8ee5d4c3c8ffddf31a21bf09129dde0dc18f8c2e",
+    "bench/npx": "2de1f66117da2e932eaa5f449f83d62829bcfadb5fe1504739ea0225d0252074",
+    "bench/Containerfile": "62679bf86ba6a55ed9d5af0293f217dc78ebc061327aedc2583f2d2b4fbb34f8",
+    "bench/preflight-probe.mjs": "00a8d9f23ab71ba6144bae6f9ebab77e4d02db42af2f93fcda2cfdaab869cd16",
+    ".pi/benchmark/runtime/models.json": "56e77d565b510f88ea159ac32feb24342eaea1a8ea67bae0b07d25734c12f303",
+    ".pi/benchmark/runtime/setup.json": "7bb634976ad88bcb7bba1e358ed1aa263a4c69a4c18bf14c22fc7360616d9bdb",
+    "bench/ab-metrics.ts": "70a9079b76406ab876418a115cf6acc3fa87f8e7b6a5d77fee9e42d2f7ab7076",
+    "bench/ab-overhead.ts": "2a2750f33841613f0a10861e0560a9b7f798dbf9215df20950843a0c3ca38907",
+    "bench/ab-report.ts": "94598cb3c958d343d14ba31c2d0ffea616d07671723e447d0e84083cd67af896",
+    "bench/ab-run.ts": "145d1b7cfa1d8ef927c4c50076a08752913b4389d4f30e61ebef0a59d89482bf",
+    "bench/ab-score.ts": "2895ace5283576ce6aa2cf5645db682c01e722035147bf7dc38aca7eafe6f43f",
+    "bench/ab-tier1-report.ts": "e736393446875a30d789d19f26b263ce31bac3e67a33a6b609b85cd67b498460",
+    "bench/auth.test.ts": "4b4e7502b5f05aabf40b071c9fc851984ecbae0dcf49e1134254e485534c80bd",
+    "bench/auth.ts": "81befcbeb63f798f193f00302f2f8273866e154428a3ebc307e5eae09f6a8b98",
+    "bench/core.test.ts": "25640d07dd4819c2db874da69e2fad8538ab4c89a3e83723fbf0671076500ff7",
+    "bench/core.ts": "8cc15bd687ef12a611fed218b8f8bcef525af94cf7233eb8e4163c3c83d1e32f",
+    "bench/curate.ts": "aa37c2fffc4d2df7af2c311a0080e231bb9f2ad8875968c133d6a3a7a22f0e09",
+    "bench/final-adjudication.json": "44708ee3de75edb2db52c4868bac01084f3ae601e773faf1b863a320a898d2e3",
+    "bench/gateway.test.ts": "4f6c4f3ee226ef430a99fd3467294458329b32f35e1e6d2f63cf5fd3ab8b9c80",
+    "bench/gateway.ts": "e5f0936211c26f72f7a7f7bd8b82b83d25c3321a00e1627dafe94fb769133452",
+    "bench/gold-round2.json": "19a9d08b7a32558bc6484441aee775af9765fec582e88f8ede0cbb962213ec61",
+    "bench/gold.json": "1d09ac7d57ca5cba57afa136ebcd23ef6c9a2e0661d6ceb751e82e77d48d5484",
+    "bench/grade.ts": "ddd78dcfc22d64a257fb0b9666dc031e06ab8f1838f4d1025ef918f1f73fa637",
+    "bench/helper-adapter.py": "9e4e92e872698510d4b6e78d4c26d033f0ff55ad071653e1182b3bc8f82fb497",
+    "bench/mock-provider.ts": "f0663ea9ac1903685d129613395d9e4a99e9c068dab8745eeed534e734434e94",
+    "bench/observer.test.ts": "5a62bf200aabb4b0c97f4d91efb0cd9d69952f61c08fb08459f29b1b1ae4f8c4",
+    "bench/observer.ts": "4a8961f25feeba145e4bfb16d63976b83d9aa1e62323b7e65f8977c939dab5f9",
+    "bench/preflight.ts": "725b78740ba691605e9101b2ef5abd9389a37cb51ed6bee1ce3512b5f8116576",
+    "bench/prepare.ts": "cff428583d2c5b1887d78f24487902e4d43fb6a1c9fbc7b763d2fb74660b9a9e",
+    "bench/prices.lock.json": "cf39e8f4221b0f498c92ec96240b15a306449ddda1a66f15a8cc7d5f260b3e96",
+    "bench/r2-run.ts": "11a2ca169e07265ff36c094bacbaa2ac43541e0e6950d64dd0f53cca6e91a361",
+    "bench/report.test.ts": "f98dde0f274718a0f09667d13976482ae8901d7dfeaa3219b8485d4e70b360bb",
+    "bench/report.ts": "af56a43288e2921fa721879c49e0531b61a1ca48318ba2445334297e965ac8e3",
+    "bench/run.ts": "c6205f7c7263c1ef812eb6d906034cc67708290a6d9d41ab72b9c63959243b1a",
+    "bench/sandbox.ts": "23ccd3c7a7696fd4f38cf652797dfa6c18f725e476b8a65d54aad523cddc1211",
+    "bench/score.ts": "fc33d5ec3381ae97b60f4e3a54deead957ab955207fa9110f5675200070ecc3d",
+    "bench/scoring-schema.json": "f043052a6909aa2f512f0e65b03ffbf1bd55b76707bff774d3460bf82a182e5c",
+    "bench/summarize.ts": "87edba3481ea08e6c5d9ea8747c283d770baf7594376db225499cc2da4e85f6f",
+    "docs/benchmark-cases.json": "6eaa4918422bb99ecff440b021cc198b8dad75387c730d2b517ae09b97ab0005",
+    "docs/benchmark-cli-baseline.lock.json": "61372d42fa25046ad9e961c04679186898a0fecb7d83b44c925a48cac6572df0"
+  }
+}

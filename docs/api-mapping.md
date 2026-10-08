@@ -1,0 +1,324 @@
+# Research interface mapping
+
+Status: contract review draft. Implementation is in progress.
+This document describes the proposed replacement, not the current nine-tool baseline.
+Installation, publication, and changes to the running receiver remain separate.
+
+## Review summary
+
+- **Chosen workflows:** source discovery, page reading, synchronous people/company search, cited conversation, and background Task research.
+- **Intentional omissions:** monitoring, account administration, stream/poll controls, and arbitrary callback settings.
+- **Entity coverage:** native Fast Entity Search in `web_search`. No new async FindAll discovery, expansion, or enrichment.
+- **Open contract choice:** caller-defined strict JSON schema. Retrieving a result does not generate a different output format.
+- **Release checks:** cross-slice integration, real model navigation, and actual provider callback delivery remain unverified.
+- **Deployment blocker:** the configured public callback URL fails DNS resolution from this machine.
+- **Effort:** user-confirmed policy. Default is `low`, with no automatic escalation.
+- **MCP:** an alternative, not an approved replacement. Its documented later-turn result retrieval does not establish automatic offline delivery.
+
+## Three commands
+
+Each object rejects unknown fields. Semantic validation runs before paid requests.
+Blank strings, invalid URLs, invalid domains, and incompatible argument combinations are errors.
+
+### `web_search`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": { "type": "string", "minLength": 1 },
+    "entity": { "enum": ["people", "companies"] },
+    "effort": { "enum": ["low", "medium", "high"] },
+    "urls": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "maxItems": 20
+    },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+- Query only: Search with the query as its objective and search query.
+- Discovery effort: low selects fast, medium selects basic, and high selects advanced.
+- Query and entity: native Fast Entity Search for people or companies.
+- URLs: Extract those pages. An optional query supplies focus.
+- Domains: restrict discovery sources. Domains with explicit URLs are rejected.
+- Entity search rejects URLs and domains. Its documented request has no hard source filter.
+- URL reading and entity search reject explicit effort. They have no tier selection.
+- Entity search uses the backend's default limit of 100 results, with no public count knob.
+- Entity results return names, canonical URLs, and descriptions. They do not include native enrichment.
+- Published cost is $0.005 per entity-search request, including 100 results.
+- Return: readable evidence, source URLs, and saved-file pointers.
+- Full extracted content stays in the artifact even if the preview omits it.
+
+### `interactive_search`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "question": { "type": "string", "minLength": 1 },
+    "conversation": { "type": "string", "minLength": 1 },
+    "effort": { "enum": ["low", "medium", "high"] },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "required": ["question"],
+  "additionalProperties": false
+}
+```
+
+- Question: request a cited Responses answer.
+- Question and conversation: resolve the local reference to the previous response internally.
+- Domains: restrict research sources through the backend's allow filter.
+- Return: cited answer, immutable local conversation reference, and artifact.
+- Each answer gets a new reference. Parallel follow-ups cannot replace their parent.
+- Partial answers retain their artifact and any known continuation identity.
+- An uncertain paid request is never silently repeated.
+
+### `deep_search`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      ]
+    },
+    "research": { "type": "string", "minLength": 1 },
+    "effort": { "enum": ["low", "medium", "high"] },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+| Branch | Behavior |
+| --- | --- |
+| Query | Submit new research to this session's group. Return a local reference before research finishes. |
+| Query array | Submit independent briefs to the same group. Each brief gets its own reference and dispatch intent. |
+| Reference only | Read saved evidence or request explicit bounded recovery. Never create a group or add work. |
+| Query and completed reference | Submit an explicit follow-up grounded in the saved answer. Reuse the known interaction context internally when available. |
+| Query and pending/incompatible reference | Reject. Do not turn a read or ambiguous follow-up into another paid submission. |
+
+Reference-only calls reject effort and domains.
+Domains become a per-run source policy, not just text in the brief.
+The initial implementation submits one Task input per addition to avoid uncertain ordering of returned run IDs.
+
+## What happens to the existing research methods?
+
+“Internal” means the method still runs when needed. Its controls disappear from the model interface.
+“Recovery” means an explicit, bounded read. It does not mean continuous polling.
+“Omitted” means the new interface does not provide that capability.
+
+| Existing surface | New mapping | Disposition |
+| --- | --- | --- |
+| Search | `web_search.query` and discovery `domains` | Exposed through intent fields. |
+| Extract | `web_search.urls` and optional `query` | Exposed through page-reading intent. |
+| Responses create | `interactive_search.question`, `effort`, `domains` | Internal request construction. |
+| Responses continuation | `interactive_search.conversation` | Local reference resolves the remote response identity. |
+| Task create | `deep_search.query` | Group addition creates the Task; no separate create action. |
+| Task result | Verified completion callback | Internal one-shot result fetch after the callback. |
+| Task status | `deep_search.research` recovery | Explicit bounded snapshot or dispatch reconciliation. |
+| Task input | Persisted submission brief | No input-retrieval control. Retain a read only if reconciliation needs it. |
+| Task progress events | None | Omitted from normal completion. No competing event stream. |
+| Task Group create | First deep submission with no cached group | Internal lazy initialization. |
+| Task Group add | Deep submission after group initialization | Internal dispatch. |
+| Task Group status/run snapshots | Recovery of known work | Internal bounded reconciliation, never paid resubmission. |
+| Task Group runs/events streams | None in normal completion | Omitted transport controls. Webhooks drive completion. |
+| FindAll ingest/preview/create | Not mapped in the initial Task path | Specialized entity enumeration remains a coverage gap. |
+| FindAll entity search | `web_search.query` and `entity` | Native synchronous people/company search. No group or callback. |
+| FindAll extend/exclusions | Not mapped | No native match-count expansion or exclusion-list continuation. |
+| FindAll enrich/schema | Not mapped | No native per-entity enrichment or schema guarantee. |
+| FindAll result/status | Existing registered legacy work | Preserve recovery internally; do not strand accepted runs. |
+| FindAll events | None for new work | Webhooks replace completion transport, not enumeration semantics. |
+| Monitor create/update/trigger/cancel/list/events | None | Explicitly excluded from the three-tool interface. Preserve accepted legacy registrations. |
+| Remote Memory retrieve/evict/clear | None | Local references do not reproduce remote memory administration. No deletion control. |
+| Account management | Existing human login/logout/balance commands | No account model tool or new administration commands. |
+| Legacy callback recovery | Existing `/parallel-webhook` command | Human recovery remains available for accepted work. |
+
+### Entity coverage is deliberately narrow
+
+The latest user decision selects native Fast Entity Search within `web_search`.
+The `entity` field chooses people or companies explicitly. No extra routing-model call selects a paid backend.
+The request contains `entity_type` and `objective`; its optional `match_limit` defaults to 100.
+The pinned SDK exposes no domain filter for this endpoint, so incompatible filters are rejected.
+
+There are no FindAll create, preview, extend, or enrich workflows for new work.
+Existing accepted FindAll runs still receive internal recovery.
+Fast Entity Search does not create a group, require callbacks, or insert a session/group association.
+Task Group additions remain Task `RunInput` objects, not FindAll memberships.
+This is curated coverage, not full FindAll parity.
+
+### JSON, prose, and result retrieval
+
+Task result retrieval returns the output selected by the creation schema: text or JSON.
+It does not generate a missing alternative format.
+Published pricing charges per successfully completed Task Run, not per output field.
+No separate result-read charge is listed.
+
+One creation can request a JSON object with a prose `report` field and structured fields.
+That uses the same processor/run price, not a second research submission.
+The receiver preserves the raw output and its citation basis.
+Readable rendering is local and must not trigger another paid request.
+
+The present three-schema proposal omits an arbitrary output-schema field.
+Thus it cannot yet promise caller-defined strict JSON plus prose.
+That capability needs an explicit creation-time contract decision, not a new retrieval action.
+
+## Meaningful option mapping
+
+| Old option family | New treatment |
+| --- | --- |
+| `action` and operation selectors | Removed. The command and its argument combination select the branch. |
+| Search `objective`, `search_queries`; Extract focus | Derived from `web_search.query`. No keyword-query expansion model call. |
+| Entity type/objective/count | `web_search.entity` selects people/companies; query supplies objective; backend default is 100. No count knob. |
+| Search `mode` | Derived from discovery `effort`: low/fast, medium/basic, high/advanced. No processor names in arguments. |
+| Retrieval counts and excerpt/full-content limits | Internal existing limits. Extract requests full content. No new completeness claim beyond returned evidence. |
+| Cache age, cache fallback, fetch timeout | Internal existing defaults. No model-facing cache/transport knobs. |
+| Include/allow domains | Exposed as `domains`; translated to the appropriate source filter. |
+| Exclude/block domains, raw source policy, date/location filters | Omitted as hard controls. A brief can request context, but it does not guarantee these filters. |
+| Responses message roles and separate instructions | One `question` plus saved conversation context. No model-supplied system/developer message array. |
+| Responses format/stream/metadata | Internal answer format and non-streamed call initially. No arbitrary format or metadata control. |
+| `previous_response_id` | Derived from the local conversation reference. |
+| `previous_interaction_id` | Derived from a completed Task artifact when available. No public remote identity. |
+| Task processor and FindAll generator | Task processor derives from effort. Async FindAll generation is excluded from new work. |
+| Task input/task specification/output schema | Brief becomes Task input with an internal cited-report specification. Machine-enforced arbitrary schemas are omitted. |
+| Query batches | Exposed by `deep_search.query` array. Group membership and transport are internal. |
+| `run_id`, `taskgroup_id`, `findall_id`, response/interaction IDs | Internal SQLite state and diagnostic artifacts. Normal results use local references. |
+| `wait_seconds`, polling and stream cursors | Removed from normal calls. Deep submission returns without awaiting completion. |
+| `webhook_url`, webhook events and signing scheme | Deployment configuration and required per-run subscription. No agent override or opt-out. |
+| `enable_events` | No progress-stream workflow. Backend defaults can remain, but callers do not consume them. |
+| MCP configuration and tool allowlists | Omitted. No model-supplied endpoints or credential headers. |
+| Metadata/client-model/session identifiers | Derived internally where needed for correlation and diagnostics. |
+| Memory-scope keys | No public override. Do not equate a session's group with an isolated backend memory scope. |
+| FindAll conditions/match limits/exclude list | Async enumeration capabilities omitted by the narrower entity-search decision. |
+| FindAll preview/extend/enrich/cancel controls | Unmapped. No automatic expensive expansion or destructive cancellation. |
+| Monitor frequency/backfill/snapshot controls | Omitted because monitoring is excluded. |
+| `return_mode`, preview budget | Internal readable preview with complete saved evidence. No public transport/output selector. |
+| `output_path`, overwrite | Automatic private artifacts that never overwrite existing evidence. Caller can read or copy the returned file. |
+| Authentication, balance, keys and credit | Existing human authentication/balance commands only. No new account operations or automatic credit. |
+
+## Effort policy and evidence
+
+The user confirmed these exact mappings from the supplied tier screenshot:
+
+| Path | Public effort | Internal choice |
+| --- | --- | --- |
+| `web_search` discovery | `low` / `medium` / `high` | Search `fast` / `basic` / `advanced`. Default `low`. |
+| `web_search` URL/entity branch | None | Extract or native Fast Entity Search. Explicit effort is rejected. |
+| `interactive_search` | `low` / `medium` / `high` | Responses `low` / `medium` / `high`. Default `low`. |
+| `deep_search` | `low` / `medium` / `high` | Task `core` / `pro` / `ultra2x`. Default `low`. |
+
+The saved probe supports latency observations, not a universal quality ranking.
+It covers three Search questions and one Responses/Task objective.
+Deep collected-result timings contain collector delay.
+Policy selection is settled. It does not establish measured quality or latency gains.
+The [saved-answer review](effort-qualification.md) preserves historical limits, not an alternative current policy.
+No further tier-selection experiment is needed.
+The screenshot lists Task prices of $0.025, $0.10, and $0.60 per run for the selected tiers.
+Price observations are not invoice verification or automatic spending gates.
+No silent escalation or automatic paid retry is allowed.
+
+## Group cache and SQLite lifecycle
+
+```text
+session_start
+  -> resolve Pi session ID
+  -> lookup its existing research association
+  -> hydrate runtime groupId and attach recovery
+  -> no session-row insertion and no remote group creation
+
+deep submission
+  -> validate all inputs and callback configuration
+  -> if runtime groupId is missing: await shared ensureGroup promise
+  -> persist initialization intent for this research session
+  -> create group once, persist its ID, then cache it
+  -> persist each submission intent before adding its Task
+
+session switch/reload
+  -> detach old notification context
+  -> clear/rebind runtime cache
+  -> reload known group from SQLite
+```
+
+Only sessions that submit deep research get durable group associations.
+Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
+Reference-only reads bypass group initialization.
+SQLite is the existing webhook store, not a second database or an all-session registry.
+Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
+Session stop does not close the remote group or drain research.
+
+## Webhook completion
+
+```text
+Task completes
+  -> existing receiver verifies callback
+  -> SQLite stores/deduplicates it before HTTP acknowledgement
+  -> processing inside that same receiver process fetches the result
+  -> private evidence artifact precedes completed state
+  -> owning session receives a local-reference notification
+  -> inactive owner retains notification for resume
+```
+
+The callback contains a Task Run status object, not the answer and citations.
+The result fetch remains internal; only the polling controls disappear.
+Retrieval and session notification remain separate.
+Unacknowledged notifications survive event pruning. Delayed registration must not discard the callback.
+No new listener, daemon, or installed-package change is part of this checkout's implementation.
+Using the new worker in production requires a separate deployment of this checkout's receiver code.
+
+## MCP alternative
+
+| Question | Current three-command design | Official MCP tools |
+| --- | --- | --- |
+| Routine retrieval | One query/URL command plus native entity intent | Search MCP exposes `web_search` and `web_fetch`. |
+| Long research | Local references, lazy Task group, verified callbacks | Task MCP exposes create, group, status, and Markdown-result tools. |
+| Completion | Existing receiver persists outcomes and routes owner notifications | Current docs require an additional turn to request ready results. |
+| Offline owner | Same receiver process can save results while Pi is stopped | Automatic offline artifact storage and session routing are not established. |
+| Maintenance | Curated request mapping plus local persistence and delivery | Hosted tools reduce custom request mapping, but do not remove local delivery requirements. |
+
+No MCP replacement or extra adapter is authorized.
+If later-turn retrieval replaces automatic notification as the desired outcome, reconsider MCP rather than rebuilding every backend option.
+
+## Source basis and deciding checks
+
+- `PLAN.md`: recovered intent, exclusions, evidence limits, and webhook guarantees.
+- Latest user decisions: lazy initialization, lookup-only startup, per-session runtime cache, and no extra database.
+- User-confirmed tier screenshot: discovery fast/basic/advanced, Responses low/medium/high, Tasks core/pro/ultra2x. No private screenshot data is stored here.
+- `src/ops.ts`: current research request construction and one-shot retrieval helpers.
+- `docs/tool-reference.md`: existing retrieval, artifact, callback, schema, and processor controls.
+- `parallel-web@1.3.3`, `resources/task-group.d.ts`: Task inputs accepted by group additions.
+- `parallel-web@1.3.3`, `resources/task-run.d.ts`: per-input source policy, context, metadata, and webhook fields.
+- `parallel-web@1.3.3`, `resources/beta/findall.d.ts`: native entity-search fields, default 100, and people/company scope.
+- [Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) and [Task MCP](https://docs.parallel.ai/integrations/mcp/task-mcp): hosted tools and later-turn completion limit.
+- [Current callback guide](https://docs.parallel.ai/task-api/webhooks): status payload contract.
+- [Task result contract](https://docs.parallel.ai/api-reference/tasks/retrieve-task-run-result.md): one schema-selected output.
+- [Published pricing](https://docs.parallel.ai/resources/pricing): successful Task Run pricing, not output-field pricing.
+- Saved qualification: `~/Projects/JangLabs/pi-parallelized/.pi/three-tool-tier-probe/`.
+- Live group probe: `.pi/group-status-probe/2026-10-07T18-50-05.627Z/REPORT.md`.
+
+Before claiming release readiness, verify the registered schemas, paid-request behavior, durable recovery, and actual callback delivery.
+Isolated loopback tests establish local correctness, not public provider delivery or model navigation.
+The configured public callback URL currently fails DNS resolution from this machine.

@@ -1,0 +1,45 @@
+{
+  "search_id": "search_r2_fixture",
+  "results": [
+    {
+      "url": "https://devguide.python.org/versions/",
+      "title": "Python Developer's Guide - Status of Python Versions",
+      "excerpts": ["Python 3.12 reached bugfix status and expected end-of-life is October 2028."]
+    },
+    {
+      "url": "https://peps.python.org/pep-0693/",
+      "title": "PEP 693 – Python 3.12 Release Schedule",
+      "excerpts": ["3.12.0 final release: 2023-10-02. End of life: 2028-10."]
+    },
+    {
+      "url": "https://nodejs.org/en/about/previous-releases",
+      "title": "Node.js Releases",
+      "excerpts": ["Node.js 22 end-of-life is scheduled for 2027-04-30."]
+    },
+    {
+      "url": "https://github.com/nodejs/Release",
+      "title": "Node.js Release Working Group",
+      "excerpts": ["Node 22 maintenance LTS ends April 30, 2027."]
+    },
+    {
+      "url": "https://www.postgresql.org/support/versioning/",
+      "title": "PostgreSQL: Versioning Policy",
+      "excerpts": ["PostgreSQL 16 final release date: November 9, 2028."]
+    },
+    {
+      "url": "https://endoflife.date/postgresql",
+      "title": "PostgreSQL EOL Date",
+      "excerpts": ["PostgreSQL 16 support ends on 2028-11-09."]
+    },
+    {
+      "url": "https://endoflife.date/nodejs",
+      "title": "Node.js EOL Date",
+      "excerpts": ["Node.js 22 LTS ends 2027-04-30."]
+    },
+    {
+      "url": "https://endoflife.date/python",
+      "title": "Python EOL Date",
+      "excerpts": ["Python 3.12 active support ends 2028-10."]
+    }
+  ]
+}

@@ -1,0 +1,3805 @@
+{
+  "generatedAt": "2026-09-21T10:35:49.560Z",
+  "decision": "inconclusive",
+  "scope": "12 primary pairs; full per-rater estimates use every attempted run and keep original rater scores. The agreed-only subset and the Grok overlay set are separate; overlay field copies are not rater consensus and are not averages.",
+  "consensusSubset": {
+    "primary": {
+      "nPairs": 8,
+      "deltas": [
+        0,
+        -1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "meanDelta": 0.125,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.25,
+        "hi": 0.5,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 3,
+        "positives": 2,
+        "negatives": 1,
+        "p": 1
+      },
+      "strata": {
+        "web": {
+          "nPairs": 4,
+          "deltas": [
+            -1,
+            1,
+            0,
+            1
+          ],
+          "meanDelta": 0.25,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.5,
+            "hi": 1,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "signTest": {
+            "n": 3,
+            "positives": 2,
+            "negatives": 1,
+            "p": 1
+          }
+        },
+        "no_web": {
+          "nPairs": 4,
+          "deltas": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "meanDelta": 0,
+          "ci": {
+            "level": 0.95,
+            "lo": 0,
+            "hi": 0,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "signTest": {
+            "n": 0,
+            "positives": 0,
+            "negatives": 0,
+            "p": 1
+          }
+        }
+      }
+    },
+    "quality": {
+      "nPairs": 8,
+      "deltas": [
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        -1
+      ],
+      "meanDelta": 0.25,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.375,
+        "hi": 1.125,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 2,
+        "positives": 1,
+        "negatives": 1,
+        "p": 1
+      },
+      "noninferiorityMargin": 0.25,
+      "qualityDegradationRuledOut": false
+    },
+    "conservativePrimary": {
+      "nPairs": 12,
+      "deltas": [
+        0,
+        0,
+        -1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        -2,
+        0,
+        -2
+      ],
+      "meanDelta": -0.3333333333333333,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.8333333333333334,
+        "hi": 0.08333333333333333,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 4,
+        "positives": 1,
+        "negatives": 3,
+        "p": 0.6249999999999999
+      }
+    },
+    "leaveOneFamilyOut": [
+      {
+        "droppedFamily": "nodejs-release-schedule",
+        "nPairs": 6,
+        "meanDelta": 0.3333333333333333,
+        "ci": {
+          "level": 0.95,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "none-local-fixture",
+        "nPairs": 6,
+        "meanDelta": 0.16666666666666666,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.3333333333333333,
+          "hi": 0.6666666666666666,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "none-user-intent",
+        "nPairs": 7,
+        "meanDelta": 0.14285714285714285,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.2857142857142857,
+          "hi": 0.5714285714285714,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "postgresql-versioning-policy",
+        "nPairs": 7,
+        "meanDelta": 0,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.42857142857142855,
+          "hi": 0.42857142857142855,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "python-docs-asyncio",
+        "nPairs": 6,
+        "meanDelta": 0,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.5,
+          "hi": 0.5,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      }
+    ],
+    "familySpecific": false,
+    "time": {
+      "rows": [
+        {
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "tau": 600000,
+          "eRestrictedMs": 16836.600000000002,
+          "cRestrictedMs": 17029.413,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "tau": 600000,
+          "eRestrictedMs": 21180.34,
+          "cRestrictedMs": 600000,
+          "eCensored": false,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "tau": 120000,
+          "eRestrictedMs": 6389.379,
+          "cRestrictedMs": 8500.695,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "tau": 600000,
+          "eRestrictedMs": 17689.619000000002,
+          "cRestrictedMs": 26711.503,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "tau": 120000,
+          "eRestrictedMs": 4731.403,
+          "cRestrictedMs": 7658.674,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "tau": 120000,
+          "eRestrictedMs": 3574.5139999999997,
+          "cRestrictedMs": 3288.98,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 15909.668,
+          "eCensored": true,
+          "cCensored": false
+        }
+      ],
+      "perArmMeanMs": {
+        "E": 305866.82125,
+        "C": 306591.57775
+      },
+      "meanDeltaMs": -724.7564999999886,
+      "ci": {
+        "level": 0.95,
+        "lo": -145377.74300000005,
+        "hi": 144918.87333333332,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "descriptiveSuccessfulMedianMs": {
+        "E": 11612.989500000001,
+        "C": 12205.181499999999
+      },
+      "note": "Restricted mean time at the common deadline; unsuccessful runs censored at tau. Successful-only medians are descriptive and can reward fast failures."
+    },
+    "efficiency": {
+      "overall": {
+        "E": {
+          "runs": 12,
+          "unscoredRuns": 4,
+          "contextTokens": 545372,
+          "outputTokens": 11087,
+          "sumQuality": 23,
+          "sumSupportedClaims": 19,
+          "qualityPointsPer10kTokens": 0.4217304885472668,
+          "supportedClaimsPer10kTokens": 0.34838605575643783
+        },
+        "C": {
+          "runs": 12,
+          "unscoredRuns": 2,
+          "contextTokens": 297828,
+          "outputTokens": 11854,
+          "sumQuality": 26,
+          "sumSupportedClaims": 23,
+          "qualityPointsPer10kTokens": 0.872987093221591,
+          "supportedClaimsPer10kTokens": 0.7722578132344843
+        }
+      },
+      "byStratum": {
+        "web": {
+          "E": {
+            "runs": 8,
+            "unscoredRuns": 4,
+            "contextTokens": 456280,
+            "outputTokens": 9677,
+            "sumQuality": 11,
+            "sumSupportedClaims": 12,
+            "qualityPointsPer10kTokens": 0.24108003857280616,
+            "supportedClaimsPer10kTokens": 0.26299640571578853
+          },
+          "C": {
+            "runs": 8,
+            "unscoredRuns": 2,
+            "contextTokens": 248219,
+            "outputTokens": 10014,
+            "sumQuality": 14,
+            "sumSupportedClaims": 16,
+            "qualityPointsPer10kTokens": 0.564018064692872,
+            "supportedClaimsPer10kTokens": 0.6445920739347109
+          }
+        },
+        "no_web": {
+          "E": {
+            "runs": 4,
+            "unscoredRuns": 0,
+            "contextTokens": 89092,
+            "outputTokens": 1410,
+            "sumQuality": 12,
+            "sumSupportedClaims": 7,
+            "qualityPointsPer10kTokens": 1.3469222825842948,
+            "supportedClaimsPer10kTokens": 0.7857046648408387
+          },
+          "C": {
+            "runs": 4,
+            "unscoredRuns": 0,
+            "contextTokens": 49609,
+            "outputTokens": 1840,
+            "sumQuality": 12,
+            "sumSupportedClaims": 7,
+            "qualityPointsPer10kTokens": 2.41891592251406,
+            "supportedClaimsPer10kTokens": 1.4110342881332016
+          }
+        }
+      },
+      "note": "Includes failed and timed-out runs. Neither ratio rewards an unsupported short answer: unsupported claims earn no quality or claim credit in scoring. Null ratio means zero context tokens, reported as N/A rather than given an artificial denominator. Unscored runs contribute tokens to the denominator and are counted in unscoredRuns; a missing score is uncertainty, not zero quality."
+    },
+    "costs": {
+      "E": {
+        "runs": 12,
+        "runsWithoutLiability": 0,
+        "uncachedInputTokens": 125283,
+        "cacheReadTokens": 409002,
+        "cacheWriteTokens": 0,
+        "outputTokens": 11087,
+        "contextTokens": 545372,
+        "parallelLiabilityMicro": 20000,
+        "parallelLiabilityUsd": 0.02,
+        "supportedClaimsTotal": 19,
+        "parallelSupportedClaims": 2,
+        "runsWithoutAttribution": 4,
+        "claimsPerParallelDollar": null,
+        "modelCostUsd": null
+      },
+      "C": {
+        "runs": 12,
+        "runsWithoutLiability": 0,
+        "uncachedInputTokens": 66858,
+        "cacheReadTokens": 219116,
+        "cacheWriteTokens": 0,
+        "outputTokens": 11854,
+        "contextTokens": 297828,
+        "parallelLiabilityMicro": 19000,
+        "parallelLiabilityUsd": 0.019,
+        "supportedClaimsTotal": 23,
+        "parallelSupportedClaims": 5,
+        "runsWithoutAttribution": 2,
+        "claimsPerParallelDollar": null,
+        "modelCostUsd": null
+      },
+      "notes": [
+        "parallelLiability is a conservative reserved-liability amount (request-price accounting), not invoice-reconciled spend.",
+        "claimsPerParallelDollar is null (N/A) for zero-spend arms: no artificial denominator is introduced; zero spend is shown directly.",
+        "supportedClaimsTotal includes all services. claimsPerParallelDollar uses only explicitly Parallel-attributed claims and is unknown if any cost or attribution is missing.",
+        "modelCostUsd is a token-price estimate distinct from Parallel charges; provider subscription estimates are not Parallel charges. Null means no prices were supplied: unknown, not zero.",
+        "Unknown Context7 or other service charges remain unknown and do not debit the Parallel-only ceiling.",
+        "runsWithoutLiability counts records with no liability field (gateway API pending): their liability is unknown and excluded from the sums, not treated as verified zero."
+      ]
+    },
+    "outcomeInventory": {
+      "rows": [
+        {
+          "runId": "primary-A1-C",
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "arm": "C",
+          "status": "completed",
+          "scored": false,
+          "successful": false,
+          "note": "missing score: explicit, never silently zero-filled in the main analysis"
+        },
+        {
+          "runId": "primary-A1-E",
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "arm": "E",
+          "status": "limit",
+          "scored": false,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-A2-C",
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-A2-E",
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-D1-C",
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-D1-E",
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-D3-C",
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-D3-E",
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-E2-C",
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-E2-E",
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-K1-C",
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-K1-E",
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L1-C",
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L1-E",
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L2-C",
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L2-E",
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-P2-C",
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-P2-E",
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "arm": "E",
+          "status": "limit",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R1-C",
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R1-E",
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "arm": "E",
+          "status": "completed",
+          "scored": false,
+          "successful": false,
+          "note": "missing score: explicit, never silently zero-filled in the main analysis"
+        },
+        {
+          "runId": "primary-R2-C",
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "arm": "C",
+          "status": "limit",
+          "scored": false,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R2-E",
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "arm": "E",
+          "status": "completed",
+          "scored": false,
+          "successful": false,
+          "note": "missing score: explicit, never silently zero-filled in the main analysis"
+        },
+        {
+          "runId": "primary-S2-C",
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-S2-E",
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "arm": "E",
+          "status": "completed",
+          "scored": false,
+          "successful": false,
+          "note": "missing score: explicit, never silently zero-filled in the main analysis"
+        }
+      ],
+      "countsByStatus": {
+        "completed": 21,
+        "limit": 3
+      },
+      "pairAnomalies": [],
+      "truncated": false,
+      "note": "Attempted pairs stay in the table: product errors, tool misuse, budget denials, and timeouts are outcomes, not reasons to rerun until success."
+    },
+    "violations": {
+      "eCritical": 0,
+      "cCritical": 0,
+      "runs": []
+    },
+    "excludedFromPaired": [
+      {
+        "pairId": "primary-A1",
+        "caseId": "A1",
+        "reason": "missing score for primary-A1-E: explicit missing score, not zero-filled in main analysis"
+      },
+      {
+        "pairId": "primary-R1",
+        "caseId": "R1",
+        "reason": "missing score for primary-R1-E: explicit missing score, not zero-filled in main analysis"
+      },
+      {
+        "pairId": "primary-R2",
+        "caseId": "R2",
+        "reason": "missing score for primary-R2-E: explicit missing score, not zero-filled in main analysis"
+      },
+      {
+        "pairId": "primary-S2",
+        "caseId": "S2",
+        "reason": "missing score for primary-S2-E: explicit missing score, not zero-filled in main analysis"
+      }
+    ],
+    "claim": {
+      "decision": "inconclusive",
+      "reasons": [
+        "primary superiority thresholds not met (mean delta 0.125, interval [-0.25, 0.5]; required mean >= 0.25 with the interval excluding zero)"
+      ]
+    },
+    "triggerTiming": {
+      "rows": [
+        {
+          "runId": "primary-D1-C",
+          "opportunityEventId": "primary-D1-C:3",
+          "externalLatencyMs": 4892,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D1-E",
+          "opportunityEventId": "primary-D1-E:3",
+          "externalLatencyMs": 2375,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D3-C",
+          "opportunityEventId": "primary-D3-C:3",
+          "externalLatencyMs": 12969,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D3-E",
+          "opportunityEventId": "primary-D3-E:3",
+          "externalLatencyMs": 2925,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-K1-C",
+          "opportunityEventId": "primary-K1-C:3",
+          "externalLatencyMs": 5120,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-K1-E",
+          "opportunityEventId": "primary-K1-E:3",
+          "externalLatencyMs": 3323,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-P2-C",
+          "opportunityEventId": "primary-P2-C:3",
+          "externalLatencyMs": null,
+          "externalCensored": true,
+          "externalCensoredAfterMs": 13739.508,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-P2-E",
+          "opportunityEventId": "primary-P2-E:3",
+          "externalLatencyMs": 7507,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-R1-C",
+          "opportunityEventId": "primary-R1-C:3",
+          "externalLatencyMs": 6100,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-S2-C",
+          "opportunityEventId": "primary-S2-C:3",
+          "externalLatencyMs": 7451,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        }
+      ],
+      "problems": []
+    },
+    "scoringSummary": {
+      "agreementRate": 0.75,
+      "adjudicationCount": 0,
+      "missingScoreCount": 6,
+      "finalOverlayCount": 6
+    },
+    "notes": [
+      "The bootstrap interval describes this fixed mixture of task blocks; it is not a population confidence claim across unseen domains. Raw paired deltas are included so another analysis can reproduce the comparison.",
+      "The corpus repeats some underlying source facts across workflows; leave-one-source-family-out results accompany the primary estimate.",
+      "Secondary metrics are descriptive; no selection of a favorable secondary metric replaces a failed primary result.",
+      "Raters receive neutral capability labels instead of product names where possible, but a scorer cannot be fully blind when output formats, CLI idioms, or unmapped tool names reveal the treatment. This report does not claim fully blind judging.",
+      "Parallel-specific trigger results are conditional diagnostics because each treatment can produce a different set of unresolved gaps.",
+      "4 pair(s) are excluded from the graded subset (missing runs or scores) and listed in excludedFromPaired; they are never zero-filled into the main analysis, and superiority cannot be claimed until they are resolved"
+    ]
+  },
+  "adjudicated": {
+    "primary": {
+      "nPairs": 12,
+      "deltas": [
+        0,
+        0,
+        -1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        0
+      ],
+      "meanDelta": 0.16666666666666666,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.16666666666666666,
+        "hi": 0.5,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 4,
+        "positives": 3,
+        "negatives": 1,
+        "p": 0.6249999999999999
+      },
+      "strata": {
+        "web": {
+          "nPairs": 8,
+          "deltas": [
+            0,
+            -1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0
+          ],
+          "meanDelta": 0.25,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.25,
+            "hi": 0.625,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "signTest": {
+            "n": 4,
+            "positives": 3,
+            "negatives": 1,
+            "p": 0.6249999999999999
+          }
+        },
+        "no_web": {
+          "nPairs": 4,
+          "deltas": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "meanDelta": 0,
+          "ci": {
+            "level": 0.95,
+            "lo": 0,
+            "hi": 0,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "signTest": {
+            "n": 0,
+            "positives": 0,
+            "negatives": 0,
+            "p": 1
+          }
+        }
+      }
+    },
+    "quality": {
+      "nPairs": 12,
+      "deltas": [
+        -2,
+        0,
+        0,
+        3,
+        0,
+        0,
+        0,
+        0,
+        -1,
+        2,
+        3,
+        1
+      ],
+      "meanDelta": 0.5,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.25,
+        "hi": 1.3333333333333333,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 6,
+        "positives": 4,
+        "negatives": 2,
+        "p": 0.6875000000000006
+      },
+      "noninferiorityMargin": 0.25,
+      "qualityDegradationRuledOut": false
+    },
+    "conservativePrimary": {
+      "nPairs": 12,
+      "deltas": [
+        -1,
+        0,
+        -1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        0
+      ],
+      "meanDelta": 0.08333333333333333,
+      "ci": {
+        "level": 0.95,
+        "lo": -0.3333333333333333,
+        "hi": 0.5,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "signTest": {
+        "n": 4,
+        "positives": 2,
+        "negatives": 2,
+        "p": 1
+      }
+    },
+    "leaveOneFamilyOut": [
+      {
+        "droppedFamily": "mixed-support-policies",
+        "nPairs": 11,
+        "meanDelta": 0.09090909090909091,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.18181818181818182,
+          "hi": 0.36363636363636365,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "nodejs-release-schedule",
+        "nPairs": 9,
+        "meanDelta": 0.3333333333333333,
+        "ci": {
+          "level": 0.95,
+          "lo": 0,
+          "hi": 0.6666666666666666,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "none-local-fixture",
+        "nPairs": 10,
+        "meanDelta": 0.2,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.2,
+          "hi": 0.6,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "none-user-intent",
+        "nPairs": 11,
+        "meanDelta": 0.18181818181818182,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.18181818181818182,
+          "hi": 0.5454545454545454,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "postgresql-versioning-policy",
+        "nPairs": 11,
+        "meanDelta": 0.09090909090909091,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.18181818181818182,
+          "hi": 0.36363636363636365,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "python-docs-asyncio",
+        "nPairs": 9,
+        "meanDelta": 0.1111111111111111,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.2222222222222222,
+          "hi": 0.4444444444444444,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      },
+      {
+        "droppedFamily": "sql-null-unique",
+        "nPairs": 11,
+        "meanDelta": 0.18181818181818182,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.18181818181818182,
+          "hi": 0.5454545454545454,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "favorable": false
+      }
+    ],
+    "familySpecific": false,
+    "time": {
+      "rows": [
+        {
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "tau": 600000,
+          "eRestrictedMs": 16836.600000000002,
+          "cRestrictedMs": 17029.413,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "tau": 600000,
+          "eRestrictedMs": 21180.34,
+          "cRestrictedMs": 600000,
+          "eCensored": false,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "tau": 120000,
+          "eRestrictedMs": 6389.379,
+          "cRestrictedMs": 8500.695,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "tau": 600000,
+          "eRestrictedMs": 17689.619000000002,
+          "cRestrictedMs": 26711.503,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "tau": 120000,
+          "eRestrictedMs": 4731.403,
+          "cRestrictedMs": 7658.674,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "tau": 120000,
+          "eRestrictedMs": 3574.5139999999997,
+          "cRestrictedMs": 3288.98,
+          "eCensored": false,
+          "cCensored": false
+        },
+        {
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "tau": 600000,
+          "eRestrictedMs": 600000,
+          "cRestrictedMs": 600000,
+          "eCensored": true,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "tau": 600000,
+          "eRestrictedMs": 21100.382999999998,
+          "cRestrictedMs": 600000,
+          "eCensored": false,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "tau": 600000,
+          "eRestrictedMs": 22868.622000000003,
+          "cRestrictedMs": 600000,
+          "eCensored": false,
+          "cCensored": true
+        },
+        {
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "tau": 600000,
+          "eRestrictedMs": 69673.495,
+          "cRestrictedMs": 15909.668,
+          "eCensored": false,
+          "cCensored": false
+        }
+      ],
+      "perArmMeanMs": {
+        "E": 165337.02958333332,
+        "C": 306591.57775
+      },
+      "meanDeltaMs": -141254.54816666665,
+      "ci": {
+        "level": 0.95,
+        "lo": -289744.2641666667,
+        "hi": -1304.0614166666662,
+        "resamples": 10000,
+        "seed": 42017
+      },
+      "descriptiveSuccessfulMedianMs": {
+        "E": 17689.619000000002,
+        "C": 12205.181499999999
+      },
+      "note": "Restricted mean time at the common deadline; unsuccessful runs censored at tau. Successful-only medians are descriptive and can reward fast failures."
+    },
+    "efficiency": {
+      "overall": {
+        "E": {
+          "runs": 12,
+          "unscoredRuns": 0,
+          "contextTokens": 545372,
+          "outputTokens": 11087,
+          "sumQuality": 34,
+          "sumSupportedClaims": 28,
+          "qualityPointsPer10kTokens": 0.6234276787220466,
+          "supportedClaimsPer10kTokens": 0.5134110295358031
+        },
+        "C": {
+          "runs": 12,
+          "unscoredRuns": 0,
+          "contextTokens": 297828,
+          "outputTokens": 11854,
+          "sumQuality": 28,
+          "sumSupportedClaims": 24,
+          "qualityPointsPer10kTokens": 0.9401399465463287,
+          "supportedClaimsPer10kTokens": 0.8058342398968532
+        }
+      },
+      "byStratum": {
+        "web": {
+          "E": {
+            "runs": 8,
+            "unscoredRuns": 0,
+            "contextTokens": 456280,
+            "outputTokens": 9677,
+            "sumQuality": 22,
+            "sumSupportedClaims": 21,
+            "qualityPointsPer10kTokens": 0.4821600771456123,
+            "supportedClaimsPer10kTokens": 0.46024371000263
+          },
+          "C": {
+            "runs": 8,
+            "unscoredRuns": 0,
+            "contextTokens": 248219,
+            "outputTokens": 10014,
+            "sumQuality": 16,
+            "sumSupportedClaims": 17,
+            "qualityPointsPer10kTokens": 0.6445920739347109,
+            "supportedClaimsPer10kTokens": 0.6848790785556303
+          }
+        },
+        "no_web": {
+          "E": {
+            "runs": 4,
+            "unscoredRuns": 0,
+            "contextTokens": 89092,
+            "outputTokens": 1410,
+            "sumQuality": 12,
+            "sumSupportedClaims": 7,
+            "qualityPointsPer10kTokens": 1.3469222825842948,
+            "supportedClaimsPer10kTokens": 0.7857046648408387
+          },
+          "C": {
+            "runs": 4,
+            "unscoredRuns": 0,
+            "contextTokens": 49609,
+            "outputTokens": 1840,
+            "sumQuality": 12,
+            "sumSupportedClaims": 7,
+            "qualityPointsPer10kTokens": 2.41891592251406,
+            "supportedClaimsPer10kTokens": 1.4110342881332016
+          }
+        }
+      },
+      "note": "Includes failed and timed-out runs. Neither ratio rewards an unsupported short answer: unsupported claims earn no quality or claim credit in scoring. Null ratio means zero context tokens, reported as N/A rather than given an artificial denominator. Unscored runs contribute tokens to the denominator and are counted in unscoredRuns; a missing score is uncertainty, not zero quality."
+    },
+    "costs": {
+      "E": {
+        "runs": 12,
+        "runsWithoutLiability": 0,
+        "uncachedInputTokens": 125283,
+        "cacheReadTokens": 409002,
+        "cacheWriteTokens": 0,
+        "outputTokens": 11087,
+        "contextTokens": 545372,
+        "parallelLiabilityMicro": 20000,
+        "parallelLiabilityUsd": 0.02,
+        "supportedClaimsTotal": 28,
+        "parallelSupportedClaims": 4,
+        "runsWithoutAttribution": 0,
+        "claimsPerParallelDollar": 200,
+        "modelCostUsd": null
+      },
+      "C": {
+        "runs": 12,
+        "runsWithoutLiability": 0,
+        "uncachedInputTokens": 66858,
+        "cacheReadTokens": 219116,
+        "cacheWriteTokens": 0,
+        "outputTokens": 11854,
+        "contextTokens": 297828,
+        "parallelLiabilityMicro": 19000,
+        "parallelLiabilityUsd": 0.019,
+        "supportedClaimsTotal": 24,
+        "parallelSupportedClaims": 5,
+        "runsWithoutAttribution": 0,
+        "claimsPerParallelDollar": 263.15789473684214,
+        "modelCostUsd": null
+      },
+      "notes": [
+        "parallelLiability is a conservative reserved-liability amount (request-price accounting), not invoice-reconciled spend.",
+        "claimsPerParallelDollar is null (N/A) for zero-spend arms: no artificial denominator is introduced; zero spend is shown directly.",
+        "supportedClaimsTotal includes all services. claimsPerParallelDollar uses only explicitly Parallel-attributed claims and is unknown if any cost or attribution is missing.",
+        "modelCostUsd is a token-price estimate distinct from Parallel charges; provider subscription estimates are not Parallel charges. Null means no prices were supplied: unknown, not zero.",
+        "Unknown Context7 or other service charges remain unknown and do not debit the Parallel-only ceiling.",
+        "runsWithoutLiability counts records with no liability field (gateway API pending): their liability is unknown and excluded from the sums, not treated as verified zero."
+      ]
+    },
+    "outcomeInventory": {
+      "rows": [
+        {
+          "runId": "primary-A1-C",
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-A1-E",
+          "pairId": "primary-A1",
+          "caseId": "A1",
+          "arm": "E",
+          "status": "limit",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-A2-C",
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-A2-E",
+          "pairId": "primary-A2",
+          "caseId": "A2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-D1-C",
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-D1-E",
+          "pairId": "primary-D1",
+          "caseId": "D1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-D3-C",
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-D3-E",
+          "pairId": "primary-D3",
+          "caseId": "D3",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-E2-C",
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-E2-E",
+          "pairId": "primary-E2",
+          "caseId": "E2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-K1-C",
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-K1-E",
+          "pairId": "primary-K1",
+          "caseId": "K1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L1-C",
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L1-E",
+          "pairId": "primary-L1",
+          "caseId": "L1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L2-C",
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-L2-E",
+          "pairId": "primary-L2",
+          "caseId": "L2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-P2-C",
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-P2-E",
+          "pairId": "primary-P2",
+          "caseId": "P2",
+          "arm": "E",
+          "status": "limit",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R1-C",
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R1-E",
+          "pairId": "primary-R1",
+          "caseId": "R1",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-R2-C",
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "arm": "C",
+          "status": "limit",
+          "scored": true,
+          "successful": false,
+          "note": null
+        },
+        {
+          "runId": "primary-R2-E",
+          "pairId": "primary-R2",
+          "caseId": "R2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-S2-C",
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "arm": "C",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        },
+        {
+          "runId": "primary-S2-E",
+          "pairId": "primary-S2",
+          "caseId": "S2",
+          "arm": "E",
+          "status": "completed",
+          "scored": true,
+          "successful": true,
+          "note": null
+        }
+      ],
+      "countsByStatus": {
+        "completed": 21,
+        "limit": 3
+      },
+      "pairAnomalies": [],
+      "truncated": false,
+      "note": "Attempted pairs stay in the table: product errors, tool misuse, budget denials, and timeouts are outcomes, not reasons to rerun until success."
+    },
+    "violations": {
+      "eCritical": 0,
+      "cCritical": 0,
+      "runs": []
+    },
+    "excludedFromPaired": [],
+    "claim": {
+      "decision": "inconclusive",
+      "reasons": [
+        "primary superiority thresholds not met (mean delta 0.16666666666666666, interval [-0.16666666666666666, 0.5]; required mean >= 0.25 with the interval excluding zero)"
+      ]
+    },
+    "triggerTiming": {
+      "rows": [
+        {
+          "runId": "primary-D1-C",
+          "opportunityEventId": "primary-D1-C:3",
+          "externalLatencyMs": 4892,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D1-E",
+          "opportunityEventId": "primary-D1-E:3",
+          "externalLatencyMs": 2375,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D3-C",
+          "opportunityEventId": "primary-D3-C:3",
+          "externalLatencyMs": 12969,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-D3-E",
+          "opportunityEventId": "primary-D3-E:3",
+          "externalLatencyMs": 2925,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-K1-C",
+          "opportunityEventId": "primary-K1-C:3",
+          "externalLatencyMs": 5120,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-K1-E",
+          "opportunityEventId": "primary-K1-E:3",
+          "externalLatencyMs": 3323,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-P2-C",
+          "opportunityEventId": "primary-P2-C:3",
+          "externalLatencyMs": null,
+          "externalCensored": true,
+          "externalCensoredAfterMs": 13739.508,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-P2-E",
+          "opportunityEventId": "primary-P2-E:3",
+          "externalLatencyMs": 7507,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-R1-C",
+          "opportunityEventId": "primary-R1-C:3",
+          "externalLatencyMs": 6100,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-S2-C",
+          "opportunityEventId": "primary-S2-C:3",
+          "externalLatencyMs": 7451,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-A1-C",
+          "opportunityEventId": "primary-A1-C:26",
+          "externalLatencyMs": null,
+          "externalCensored": true,
+          "externalCensoredAfterMs": 24100.261,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-A1-E",
+          "opportunityEventId": "primary-A1-E:3",
+          "externalLatencyMs": 12240,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-R1-E",
+          "opportunityEventId": "primary-R1-E:3",
+          "externalLatencyMs": 2778,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-R2-C",
+          "opportunityEventId": "primary-R2-C:3",
+          "externalLatencyMs": 16854,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-R2-E",
+          "opportunityEventId": "primary-R2-E:3",
+          "externalLatencyMs": 5577,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        },
+        {
+          "runId": "primary-S2-E",
+          "opportunityEventId": "primary-S2-E:3",
+          "externalLatencyMs": 3021,
+          "externalCensored": false,
+          "externalCensoredAfterMs": null,
+          "parallelLatencyMs": null,
+          "parallelCensored": false,
+          "parallelApplicable": false
+        }
+      ],
+      "problems": []
+    },
+    "scoringSummary": {
+      "agreementRate": 0.75,
+      "adjudicationCount": 0,
+      "missingScoreCount": 0,
+      "finalOverlayCount": 6
+    },
+    "notes": [
+      "The bootstrap interval describes this fixed mixture of task blocks; it is not a population confidence claim across unseen domains. Raw paired deltas are included so another analysis can reproduce the comparison.",
+      "The corpus repeats some underlying source facts across workflows; leave-one-source-family-out results accompany the primary estimate.",
+      "Secondary metrics are descriptive; no selection of a favorable secondary metric replaces a failed primary result.",
+      "Raters receive neutral capability labels instead of product names where possible, but a scorer cannot be fully blind when output formats, CLI idioms, or unmapped tool names reveal the treatment. This report does not claim fully blind judging.",
+      "Parallel-specific trigger results are conditional diagnostics because each treatment can produce a different set of unresolved gaps."
+    ]
+  },
+  "raters": {
+    "grok": {
+      "primary": {
+        "nPairs": 12,
+        "deltas": [
+          0,
+          0,
+          -1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          -1,
+          1,
+          -1
+        ],
+        "meanDelta": 0,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.4166666666666667,
+          "hi": 0.4166666666666667,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 6,
+          "positives": 3,
+          "negatives": 3,
+          "p": 1
+        },
+        "strata": {
+          "web": {
+            "nPairs": 8,
+            "deltas": [
+              0,
+              -1,
+              1,
+              0,
+              1,
+              -1,
+              1,
+              -1
+            ],
+            "meanDelta": 0,
+            "ci": {
+              "level": 0.95,
+              "lo": -0.625,
+              "hi": 0.625,
+              "resamples": 10000,
+              "seed": 42017
+            },
+            "signTest": {
+              "n": 6,
+              "positives": 3,
+              "negatives": 3,
+              "p": 1
+            }
+          },
+          "no_web": {
+            "nPairs": 4,
+            "deltas": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "meanDelta": 0,
+            "ci": {
+              "level": 0.95,
+              "lo": 0,
+              "hi": 0,
+              "resamples": 10000,
+              "seed": 42017
+            },
+            "signTest": {
+              "n": 0,
+              "positives": 0,
+              "negatives": 0,
+              "p": 1
+            }
+          }
+        }
+      },
+      "quality": {
+        "nPairs": 12,
+        "deltas": [
+          -3,
+          0,
+          0,
+          3,
+          0,
+          0,
+          0,
+          0,
+          -1,
+          2,
+          3,
+          1
+        ],
+        "meanDelta": 0.4166666666666667,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.5,
+          "hi": 1.3333333333333333,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 6,
+          "positives": 4,
+          "negatives": 2,
+          "p": 0.6875000000000006
+        },
+        "noninferiorityMargin": 0.25,
+        "qualityDegradationRuledOut": false
+      },
+      "conservativePrimary": {
+        "nPairs": 12,
+        "deltas": [
+          -1,
+          0,
+          -1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          -1,
+          2,
+          -1
+        ],
+        "meanDelta": -0.08333333333333333,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.5,
+          "hi": 0.4166666666666667,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 6,
+          "positives": 2,
+          "negatives": 4,
+          "p": 0.6875000000000006
+        }
+      },
+      "leaveOneFamilyOut": [
+        {
+          "droppedFamily": "mixed-support-policies",
+          "nPairs": 11,
+          "meanDelta": -0.09090909090909091,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.45454545454545453,
+            "hi": 0.2727272727272727,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "nodejs-release-schedule",
+          "nPairs": 9,
+          "meanDelta": 0.2222222222222222,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.2222222222222222,
+            "hi": 0.6666666666666666,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "none-local-fixture",
+          "nPairs": 10,
+          "meanDelta": 0,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.5,
+            "hi": 0.5,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "none-user-intent",
+          "nPairs": 11,
+          "meanDelta": 0,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.45454545454545453,
+            "hi": 0.45454545454545453,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "postgresql-versioning-policy",
+          "nPairs": 11,
+          "meanDelta": -0.09090909090909091,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.45454545454545453,
+            "hi": 0.2727272727272727,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "python-docs-asyncio",
+          "nPairs": 9,
+          "meanDelta": -0.1111111111111111,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.5555555555555556,
+            "hi": 0.3333333333333333,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "sql-null-unique",
+          "nPairs": 11,
+          "meanDelta": 0.09090909090909091,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.2727272727272727,
+            "hi": 0.45454545454545453,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        }
+      ],
+      "familySpecific": false,
+      "time": {
+        "rows": [
+          {
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 28809.261,
+            "eCensored": true,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "tau": 600000,
+            "eRestrictedMs": 16836.600000000002,
+            "cRestrictedMs": 17029.413,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "tau": 600000,
+            "eRestrictedMs": 21180.34,
+            "cRestrictedMs": 600000,
+            "eCensored": false,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "tau": 120000,
+            "eRestrictedMs": 6389.379,
+            "cRestrictedMs": 8500.695,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "tau": 600000,
+            "eRestrictedMs": 17689.619000000002,
+            "cRestrictedMs": 26711.503,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "tau": 120000,
+            "eRestrictedMs": 4731.403,
+            "cRestrictedMs": 7658.674,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "tau": 120000,
+            "eRestrictedMs": 3574.5139999999997,
+            "cRestrictedMs": 3288.98,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "tau": 600000,
+            "eRestrictedMs": 21100.382999999998,
+            "cRestrictedMs": 600000,
+            "eCensored": false,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "tau": 600000,
+            "eRestrictedMs": 69673.495,
+            "cRestrictedMs": 15909.668,
+            "eCensored": false,
+            "cCensored": false
+          }
+        ],
+        "perArmMeanMs": {
+          "E": 213431.31108333333,
+          "C": 258992.3495
+        },
+        "meanDeltaMs": -45561.038416666655,
+        "ci": {
+          "level": 0.95,
+          "lo": -195022.22783333334,
+          "hi": 102743.4491666667,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "descriptiveSuccessfulMedianMs": {
+          "E": 17263.109500000002,
+          "C": 15909.668
+        },
+        "note": "Restricted mean time at the common deadline; unsuccessful runs censored at tau. Successful-only medians are descriptive and can reward fast failures."
+      },
+      "efficiency": {
+        "overall": {
+          "E": {
+            "runs": 12,
+            "unscoredRuns": 0,
+            "contextTokens": 545372,
+            "outputTokens": 11087,
+            "sumQuality": 34,
+            "sumSupportedClaims": 28,
+            "qualityPointsPer10kTokens": 0.6234276787220466,
+            "supportedClaimsPer10kTokens": 0.5134110295358031
+          },
+          "C": {
+            "runs": 12,
+            "unscoredRuns": 0,
+            "contextTokens": 297828,
+            "outputTokens": 11854,
+            "sumQuality": 29,
+            "sumSupportedClaims": 26,
+            "qualityPointsPer10kTokens": 0.9737163732086976,
+            "supportedClaimsPer10kTokens": 0.872987093221591
+          }
+        },
+        "byStratum": {
+          "web": {
+            "E": {
+              "runs": 8,
+              "unscoredRuns": 0,
+              "contextTokens": 456280,
+              "outputTokens": 9677,
+              "sumQuality": 22,
+              "sumSupportedClaims": 21,
+              "qualityPointsPer10kTokens": 0.4821600771456123,
+              "supportedClaimsPer10kTokens": 0.46024371000263
+            },
+            "C": {
+              "runs": 8,
+              "unscoredRuns": 0,
+              "contextTokens": 248219,
+              "outputTokens": 10014,
+              "sumQuality": 17,
+              "sumSupportedClaims": 19,
+              "qualityPointsPer10kTokens": 0.6848790785556303,
+              "supportedClaimsPer10kTokens": 0.7654530877974691
+            }
+          },
+          "no_web": {
+            "E": {
+              "runs": 4,
+              "unscoredRuns": 0,
+              "contextTokens": 89092,
+              "outputTokens": 1410,
+              "sumQuality": 12,
+              "sumSupportedClaims": 7,
+              "qualityPointsPer10kTokens": 1.3469222825842948,
+              "supportedClaimsPer10kTokens": 0.7857046648408387
+            },
+            "C": {
+              "runs": 4,
+              "unscoredRuns": 0,
+              "contextTokens": 49609,
+              "outputTokens": 1840,
+              "sumQuality": 12,
+              "sumSupportedClaims": 7,
+              "qualityPointsPer10kTokens": 2.41891592251406,
+              "supportedClaimsPer10kTokens": 1.4110342881332016
+            }
+          }
+        },
+        "note": "Includes failed and timed-out runs. Neither ratio rewards an unsupported short answer: unsupported claims earn no quality or claim credit in scoring. Null ratio means zero context tokens, reported as N/A rather than given an artificial denominator. Unscored runs contribute tokens to the denominator and are counted in unscoredRuns; a missing score is uncertainty, not zero quality."
+      },
+      "costs": {
+        "E": {
+          "runs": 12,
+          "runsWithoutLiability": 0,
+          "uncachedInputTokens": 125283,
+          "cacheReadTokens": 409002,
+          "cacheWriteTokens": 0,
+          "outputTokens": 11087,
+          "contextTokens": 545372,
+          "parallelLiabilityMicro": 20000,
+          "parallelLiabilityUsd": 0.02,
+          "supportedClaimsTotal": 28,
+          "parallelSupportedClaims": 4,
+          "runsWithoutAttribution": 0,
+          "claimsPerParallelDollar": 200,
+          "modelCostUsd": null
+        },
+        "C": {
+          "runs": 12,
+          "runsWithoutLiability": 0,
+          "uncachedInputTokens": 66858,
+          "cacheReadTokens": 219116,
+          "cacheWriteTokens": 0,
+          "outputTokens": 11854,
+          "contextTokens": 297828,
+          "parallelLiabilityMicro": 19000,
+          "parallelLiabilityUsd": 0.019,
+          "supportedClaimsTotal": 26,
+          "parallelSupportedClaims": 5,
+          "runsWithoutAttribution": 0,
+          "claimsPerParallelDollar": 263.15789473684214,
+          "modelCostUsd": null
+        },
+        "notes": [
+          "parallelLiability is a conservative reserved-liability amount (request-price accounting), not invoice-reconciled spend.",
+          "claimsPerParallelDollar is null (N/A) for zero-spend arms: no artificial denominator is introduced; zero spend is shown directly.",
+          "supportedClaimsTotal includes all services. claimsPerParallelDollar uses only explicitly Parallel-attributed claims and is unknown if any cost or attribution is missing.",
+          "modelCostUsd is a token-price estimate distinct from Parallel charges; provider subscription estimates are not Parallel charges. Null means no prices were supplied: unknown, not zero.",
+          "Unknown Context7 or other service charges remain unknown and do not debit the Parallel-only ceiling.",
+          "runsWithoutLiability counts records with no liability field (gateway API pending): their liability is unknown and excluded from the sums, not treated as verified zero."
+        ]
+      },
+      "outcomeInventory": {
+        "rows": [
+          {
+            "runId": "primary-A1-C",
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-A1-E",
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "arm": "E",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-A2-C",
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-A2-E",
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-D1-C",
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-D1-E",
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-D3-C",
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-D3-E",
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-E2-C",
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-E2-E",
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-K1-C",
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-K1-E",
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L1-C",
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L1-E",
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L2-C",
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L2-E",
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-P2-C",
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-P2-E",
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "arm": "E",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R1-C",
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R1-E",
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-R2-C",
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "arm": "C",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R2-E",
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-S2-C",
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-S2-E",
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          }
+        ],
+        "countsByStatus": {
+          "completed": 21,
+          "limit": 3
+        },
+        "pairAnomalies": [],
+        "truncated": false,
+        "note": "Attempted pairs stay in the table: product errors, tool misuse, budget denials, and timeouts are outcomes, not reasons to rerun until success."
+      },
+      "violations": {
+        "eCritical": 0,
+        "cCritical": 0,
+        "runs": []
+      },
+      "excludedFromPaired": [],
+      "claim": {
+        "decision": "inconclusive",
+        "reasons": [
+          "primary superiority thresholds not met (mean delta 0, interval [-0.4166666666666667, 0.4166666666666667]; required mean >= 0.25 with the interval excluding zero)"
+        ]
+      },
+      "triggerTiming": {
+        "rows": [
+          {
+            "runId": "primary-A1-C",
+            "opportunityEventId": "primary-A1-C:26",
+            "externalLatencyMs": null,
+            "externalCensored": true,
+            "externalCensoredAfterMs": 24100.261,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-A1-E",
+            "opportunityEventId": "primary-A1-E:3",
+            "externalLatencyMs": 12240,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D1-C",
+            "opportunityEventId": "primary-D1-C:3",
+            "externalLatencyMs": 4892,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D1-E",
+            "opportunityEventId": "primary-D1-E:3",
+            "externalLatencyMs": 2375,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D3-C",
+            "opportunityEventId": "primary-D3-C:3",
+            "externalLatencyMs": 12969,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D3-E",
+            "opportunityEventId": "primary-D3-E:3",
+            "externalLatencyMs": 2925,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-K1-C",
+            "opportunityEventId": "primary-K1-C:3",
+            "externalLatencyMs": 5120,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-K1-E",
+            "opportunityEventId": "primary-K1-E:3",
+            "externalLatencyMs": 3323,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-P2-C",
+            "opportunityEventId": "primary-P2-C:3",
+            "externalLatencyMs": null,
+            "externalCensored": true,
+            "externalCensoredAfterMs": 13739.508,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-P2-E",
+            "opportunityEventId": "primary-P2-E:3",
+            "externalLatencyMs": 7507,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R1-C",
+            "opportunityEventId": "primary-R1-C:3",
+            "externalLatencyMs": 6100,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R1-E",
+            "opportunityEventId": "primary-R1-E:3",
+            "externalLatencyMs": 2778,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R2-C",
+            "opportunityEventId": "primary-R2-C:3",
+            "externalLatencyMs": 16854,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R2-E",
+            "opportunityEventId": "primary-R2-E:3",
+            "externalLatencyMs": 5577,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-S2-C",
+            "opportunityEventId": "primary-S2-C:3",
+            "externalLatencyMs": 7451,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-S2-E",
+            "opportunityEventId": "primary-S2-E:3",
+            "externalLatencyMs": 3021,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          }
+        ],
+        "problems": []
+      },
+      "scoringSummary": {
+        "agreementRate": 0.75,
+        "adjudicationCount": 0,
+        "missingScoreCount": 0,
+        "finalOverlayCount": 6
+      },
+      "notes": [
+        "The bootstrap interval describes this fixed mixture of task blocks; it is not a population confidence claim across unseen domains. Raw paired deltas are included so another analysis can reproduce the comparison.",
+        "The corpus repeats some underlying source facts across workflows; leave-one-source-family-out results accompany the primary estimate.",
+        "Secondary metrics are descriptive; no selection of a favorable secondary metric replaces a failed primary result.",
+        "Raters receive neutral capability labels instead of product names where possible, but a scorer cannot be fully blind when output formats, CLI idioms, or unmapped tool names reveal the treatment. This report does not claim fully blind judging.",
+        "Parallel-specific trigger results are conditional diagnostics because each treatment can produce a different set of unresolved gaps."
+      ]
+    },
+    "gpt": {
+      "primary": {
+        "nPairs": 12,
+        "deltas": [
+          0,
+          0,
+          -1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1,
+          0
+        ],
+        "meanDelta": 0.16666666666666666,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.16666666666666666,
+          "hi": 0.5,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 4,
+          "positives": 3,
+          "negatives": 1,
+          "p": 0.6249999999999999
+        },
+        "strata": {
+          "web": {
+            "nPairs": 8,
+            "deltas": [
+              0,
+              -1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              0
+            ],
+            "meanDelta": 0.25,
+            "ci": {
+              "level": 0.95,
+              "lo": -0.25,
+              "hi": 0.625,
+              "resamples": 10000,
+              "seed": 42017
+            },
+            "signTest": {
+              "n": 4,
+              "positives": 3,
+              "negatives": 1,
+              "p": 0.6249999999999999
+            }
+          },
+          "no_web": {
+            "nPairs": 4,
+            "deltas": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "meanDelta": 0,
+            "ci": {
+              "level": 0.95,
+              "lo": 0,
+              "hi": 0,
+              "resamples": 10000,
+              "seed": 42017
+            },
+            "signTest": {
+              "n": 0,
+              "positives": 0,
+              "negatives": 0,
+              "p": 1
+            }
+          }
+        }
+      },
+      "quality": {
+        "nPairs": 12,
+        "deltas": [
+          -2,
+          0,
+          0,
+          3,
+          0,
+          0,
+          0,
+          0,
+          -1,
+          2,
+          3,
+          1
+        ],
+        "meanDelta": 0.5,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.25,
+          "hi": 1.3333333333333333,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 6,
+          "positives": 4,
+          "negatives": 2,
+          "p": 0.6875000000000006
+        },
+        "noninferiorityMargin": 0.25,
+        "qualityDegradationRuledOut": false
+      },
+      "conservativePrimary": {
+        "nPairs": 12,
+        "deltas": [
+          -1,
+          0,
+          -1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0
+        ],
+        "meanDelta": 0.08333333333333333,
+        "ci": {
+          "level": 0.95,
+          "lo": -0.3333333333333333,
+          "hi": 0.5,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "signTest": {
+          "n": 4,
+          "positives": 2,
+          "negatives": 2,
+          "p": 1
+        }
+      },
+      "leaveOneFamilyOut": [
+        {
+          "droppedFamily": "mixed-support-policies",
+          "nPairs": 11,
+          "meanDelta": 0.09090909090909091,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.18181818181818182,
+            "hi": 0.36363636363636365,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "nodejs-release-schedule",
+          "nPairs": 9,
+          "meanDelta": 0.3333333333333333,
+          "ci": {
+            "level": 0.95,
+            "lo": 0,
+            "hi": 0.6666666666666666,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "none-local-fixture",
+          "nPairs": 10,
+          "meanDelta": 0.2,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.2,
+            "hi": 0.6,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "none-user-intent",
+          "nPairs": 11,
+          "meanDelta": 0.18181818181818182,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.18181818181818182,
+            "hi": 0.5454545454545454,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "postgresql-versioning-policy",
+          "nPairs": 11,
+          "meanDelta": 0.09090909090909091,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.18181818181818182,
+            "hi": 0.36363636363636365,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "python-docs-asyncio",
+          "nPairs": 9,
+          "meanDelta": 0.1111111111111111,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.2222222222222222,
+            "hi": 0.4444444444444444,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        },
+        {
+          "droppedFamily": "sql-null-unique",
+          "nPairs": 11,
+          "meanDelta": 0.18181818181818182,
+          "ci": {
+            "level": 0.95,
+            "lo": -0.18181818181818182,
+            "hi": 0.5454545454545454,
+            "resamples": 10000,
+            "seed": 42017
+          },
+          "favorable": false
+        }
+      ],
+      "familySpecific": false,
+      "time": {
+        "rows": [
+          {
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "tau": 600000,
+            "eRestrictedMs": 16836.600000000002,
+            "cRestrictedMs": 17029.413,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "tau": 600000,
+            "eRestrictedMs": 21180.34,
+            "cRestrictedMs": 600000,
+            "eCensored": false,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "tau": 120000,
+            "eRestrictedMs": 6389.379,
+            "cRestrictedMs": 8500.695,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "tau": 600000,
+            "eRestrictedMs": 17689.619000000002,
+            "cRestrictedMs": 26711.503,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "tau": 120000,
+            "eRestrictedMs": 4731.403,
+            "cRestrictedMs": 7658.674,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "tau": 120000,
+            "eRestrictedMs": 3574.5139999999997,
+            "cRestrictedMs": 3288.98,
+            "eCensored": false,
+            "cCensored": false
+          },
+          {
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "tau": 600000,
+            "eRestrictedMs": 600000,
+            "cRestrictedMs": 600000,
+            "eCensored": true,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "tau": 600000,
+            "eRestrictedMs": 21100.382999999998,
+            "cRestrictedMs": 600000,
+            "eCensored": false,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "tau": 600000,
+            "eRestrictedMs": 22868.622000000003,
+            "cRestrictedMs": 600000,
+            "eCensored": false,
+            "cCensored": true
+          },
+          {
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "tau": 600000,
+            "eRestrictedMs": 69673.495,
+            "cRestrictedMs": 15909.668,
+            "eCensored": false,
+            "cCensored": false
+          }
+        ],
+        "perArmMeanMs": {
+          "E": 165337.02958333332,
+          "C": 306591.57775
+        },
+        "meanDeltaMs": -141254.54816666665,
+        "ci": {
+          "level": 0.95,
+          "lo": -289744.2641666667,
+          "hi": -1304.0614166666662,
+          "resamples": 10000,
+          "seed": 42017
+        },
+        "descriptiveSuccessfulMedianMs": {
+          "E": 17689.619000000002,
+          "C": 12205.181499999999
+        },
+        "note": "Restricted mean time at the common deadline; unsuccessful runs censored at tau. Successful-only medians are descriptive and can reward fast failures."
+      },
+      "efficiency": {
+        "overall": {
+          "E": {
+            "runs": 12,
+            "unscoredRuns": 0,
+            "contextTokens": 545372,
+            "outputTokens": 11087,
+            "sumQuality": 34,
+            "sumSupportedClaims": 30,
+            "qualityPointsPer10kTokens": 0.6234276787220466,
+            "supportedClaimsPer10kTokens": 0.5500832459312176
+          },
+          "C": {
+            "runs": 12,
+            "unscoredRuns": 0,
+            "contextTokens": 297828,
+            "outputTokens": 11854,
+            "sumQuality": 28,
+            "sumSupportedClaims": 25,
+            "qualityPointsPer10kTokens": 0.9401399465463287,
+            "supportedClaimsPer10kTokens": 0.8394106665592221
+          }
+        },
+        "byStratum": {
+          "web": {
+            "E": {
+              "runs": 8,
+              "unscoredRuns": 0,
+              "contextTokens": 456280,
+              "outputTokens": 9677,
+              "sumQuality": 22,
+              "sumSupportedClaims": 23,
+              "qualityPointsPer10kTokens": 0.4821600771456123,
+              "supportedClaimsPer10kTokens": 0.5040764442885948
+            },
+            "C": {
+              "runs": 8,
+              "unscoredRuns": 0,
+              "contextTokens": 248219,
+              "outputTokens": 10014,
+              "sumQuality": 16,
+              "sumSupportedClaims": 18,
+              "qualityPointsPer10kTokens": 0.6445920739347109,
+              "supportedClaimsPer10kTokens": 0.7251660831765497
+            }
+          },
+          "no_web": {
+            "E": {
+              "runs": 4,
+              "unscoredRuns": 0,
+              "contextTokens": 89092,
+              "outputTokens": 1410,
+              "sumQuality": 12,
+              "sumSupportedClaims": 7,
+              "qualityPointsPer10kTokens": 1.3469222825842948,
+              "supportedClaimsPer10kTokens": 0.7857046648408387
+            },
+            "C": {
+              "runs": 4,
+              "unscoredRuns": 0,
+              "contextTokens": 49609,
+              "outputTokens": 1840,
+              "sumQuality": 12,
+              "sumSupportedClaims": 7,
+              "qualityPointsPer10kTokens": 2.41891592251406,
+              "supportedClaimsPer10kTokens": 1.4110342881332016
+            }
+          }
+        },
+        "note": "Includes failed and timed-out runs. Neither ratio rewards an unsupported short answer: unsupported claims earn no quality or claim credit in scoring. Null ratio means zero context tokens, reported as N/A rather than given an artificial denominator. Unscored runs contribute tokens to the denominator and are counted in unscoredRuns; a missing score is uncertainty, not zero quality."
+      },
+      "costs": {
+        "E": {
+          "runs": 12,
+          "runsWithoutLiability": 0,
+          "uncachedInputTokens": 125283,
+          "cacheReadTokens": 409002,
+          "cacheWriteTokens": 0,
+          "outputTokens": 11087,
+          "contextTokens": 545372,
+          "parallelLiabilityMicro": 20000,
+          "parallelLiabilityUsd": 0.02,
+          "supportedClaimsTotal": 30,
+          "parallelSupportedClaims": 2,
+          "runsWithoutAttribution": 0,
+          "claimsPerParallelDollar": 100,
+          "modelCostUsd": null
+        },
+        "C": {
+          "runs": 12,
+          "runsWithoutLiability": 0,
+          "uncachedInputTokens": 66858,
+          "cacheReadTokens": 219116,
+          "cacheWriteTokens": 0,
+          "outputTokens": 11854,
+          "contextTokens": 297828,
+          "parallelLiabilityMicro": 19000,
+          "parallelLiabilityUsd": 0.019,
+          "supportedClaimsTotal": 25,
+          "parallelSupportedClaims": 5,
+          "runsWithoutAttribution": 0,
+          "claimsPerParallelDollar": 263.15789473684214,
+          "modelCostUsd": null
+        },
+        "notes": [
+          "parallelLiability is a conservative reserved-liability amount (request-price accounting), not invoice-reconciled spend.",
+          "claimsPerParallelDollar is null (N/A) for zero-spend arms: no artificial denominator is introduced; zero spend is shown directly.",
+          "supportedClaimsTotal includes all services. claimsPerParallelDollar uses only explicitly Parallel-attributed claims and is unknown if any cost or attribution is missing.",
+          "modelCostUsd is a token-price estimate distinct from Parallel charges; provider subscription estimates are not Parallel charges. Null means no prices were supplied: unknown, not zero.",
+          "Unknown Context7 or other service charges remain unknown and do not debit the Parallel-only ceiling.",
+          "runsWithoutLiability counts records with no liability field (gateway API pending): their liability is unknown and excluded from the sums, not treated as verified zero."
+        ]
+      },
+      "outcomeInventory": {
+        "rows": [
+          {
+            "runId": "primary-A1-C",
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-A1-E",
+            "pairId": "primary-A1",
+            "caseId": "A1",
+            "arm": "E",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-A2-C",
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-A2-E",
+            "pairId": "primary-A2",
+            "caseId": "A2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-D1-C",
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-D1-E",
+            "pairId": "primary-D1",
+            "caseId": "D1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-D3-C",
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-D3-E",
+            "pairId": "primary-D3",
+            "caseId": "D3",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-E2-C",
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-E2-E",
+            "pairId": "primary-E2",
+            "caseId": "E2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-K1-C",
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-K1-E",
+            "pairId": "primary-K1",
+            "caseId": "K1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L1-C",
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L1-E",
+            "pairId": "primary-L1",
+            "caseId": "L1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L2-C",
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-L2-E",
+            "pairId": "primary-L2",
+            "caseId": "L2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-P2-C",
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-P2-E",
+            "pairId": "primary-P2",
+            "caseId": "P2",
+            "arm": "E",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R1-C",
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R1-E",
+            "pairId": "primary-R1",
+            "caseId": "R1",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-R2-C",
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "arm": "C",
+            "status": "limit",
+            "scored": true,
+            "successful": false,
+            "note": null
+          },
+          {
+            "runId": "primary-R2-E",
+            "pairId": "primary-R2",
+            "caseId": "R2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-S2-C",
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "arm": "C",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          },
+          {
+            "runId": "primary-S2-E",
+            "pairId": "primary-S2",
+            "caseId": "S2",
+            "arm": "E",
+            "status": "completed",
+            "scored": true,
+            "successful": true,
+            "note": null
+          }
+        ],
+        "countsByStatus": {
+          "completed": 21,
+          "limit": 3
+        },
+        "pairAnomalies": [],
+        "truncated": false,
+        "note": "Attempted pairs stay in the table: product errors, tool misuse, budget denials, and timeouts are outcomes, not reasons to rerun until success."
+      },
+      "violations": {
+        "eCritical": 0,
+        "cCritical": 0,
+        "runs": []
+      },
+      "excludedFromPaired": [],
+      "claim": {
+        "decision": "inconclusive",
+        "reasons": [
+          "primary superiority thresholds not met (mean delta 0.16666666666666666, interval [-0.16666666666666666, 0.5]; required mean >= 0.25 with the interval excluding zero)"
+        ]
+      },
+      "triggerTiming": {
+        "rows": [
+          {
+            "runId": "primary-A1-C",
+            "opportunityEventId": "primary-A1-C:26",
+            "externalLatencyMs": null,
+            "externalCensored": true,
+            "externalCensoredAfterMs": 24100.261,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-A1-E",
+            "opportunityEventId": "primary-A1-E:3",
+            "externalLatencyMs": 12240,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D1-C",
+            "opportunityEventId": "primary-D1-C:3",
+            "externalLatencyMs": 5064,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D1-E",
+            "opportunityEventId": "primary-D1-E:3",
+            "externalLatencyMs": 2375,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D3-C",
+            "opportunityEventId": "primary-D3-C:3",
+            "externalLatencyMs": 12969,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-D3-E",
+            "opportunityEventId": "primary-D3-E:3",
+            "externalLatencyMs": 2925,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-K1-C",
+            "opportunityEventId": "primary-K1-C:3",
+            "externalLatencyMs": 5120,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-K1-E",
+            "opportunityEventId": "primary-K1-E:3",
+            "externalLatencyMs": 3323,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-P2-C",
+            "opportunityEventId": "primary-P2-C:3",
+            "externalLatencyMs": null,
+            "externalCensored": true,
+            "externalCensoredAfterMs": 13739.508,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-P2-E",
+            "opportunityEventId": "primary-P2-E:3",
+            "externalLatencyMs": 7507,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R1-C",
+            "opportunityEventId": "primary-R1-C:3",
+            "externalLatencyMs": 6100,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R1-E",
+            "opportunityEventId": "primary-R1-E:3",
+            "externalLatencyMs": 2778,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R2-C",
+            "opportunityEventId": "primary-R2-C:3",
+            "externalLatencyMs": 16854,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-R2-E",
+            "opportunityEventId": "primary-R2-E:3",
+            "externalLatencyMs": 5577,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-S2-C",
+            "opportunityEventId": "primary-S2-C:3",
+            "externalLatencyMs": 7451,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          },
+          {
+            "runId": "primary-S2-E",
+            "opportunityEventId": "primary-S2-E:3",
+            "externalLatencyMs": 3021,
+            "externalCensored": false,
+            "externalCensoredAfterMs": null,
+            "parallelLatencyMs": null,
+            "parallelCensored": false,
+            "parallelApplicable": false
+          }
+        ],
+        "problems": []
+      },
+      "scoringSummary": {
+        "agreementRate": 0.75,
+        "adjudicationCount": 0,
+        "missingScoreCount": 0,
+        "finalOverlayCount": 6
+      },
+      "notes": [
+        "The bootstrap interval describes this fixed mixture of task blocks; it is not a population confidence claim across unseen domains. Raw paired deltas are included so another analysis can reproduce the comparison.",
+        "The corpus repeats some underlying source facts across workflows; leave-one-source-family-out results accompany the primary estimate.",
+        "Secondary metrics are descriptive; no selection of a favorable secondary metric replaces a failed primary result.",
+        "Raters receive neutral capability labels instead of product names where possible, but a scorer cannot be fully blind when output formats, CLI idioms, or unmapped tool names reveal the treatment. This report does not claim fully blind judging.",
+        "Parallel-specific trigger results are conditional diagnostics because each treatment can produce a different set of unresolved gaps."
+      ]
+    }
+  },
+  "scoring": {
+    "firstRoundAgreement": 0.5,
+    "secondRoundAgreement": 0.75,
+    "unresolved": 0,
+    "originalDisagreements": 6,
+    "finalOverlayCount": 6,
+    "independentThirdModel": false,
+    "notRaterConsensus": true,
+    "missingRaterScores": {
+      "grok": 0,
+      "gpt": 0
+    }
+  },
+  "accounting": {
+    "existingSmokeMicro": 24000,
+    "pilotMicro": 5000,
+    "primaryMicro": 39000,
+    "totalLiabilityMicro": 68000,
+    "activeReservationMicro": 0,
+    "invoiceReconciled": false
+  },
+  "execution": {
+    "workerRuns": 30,
+    "primaryRuns": 24,
+    "pilotRuns": 6,
+    "arms": {
+      "E": {
+        "runs": 12,
+        "completed": 10,
+        "limited": [
+          "A1",
+          "P2"
+        ],
+        "contextTokens": 545372,
+        "totalElapsedMs": 255780.731,
+        "parallelLiabilityMicro": 20000,
+        "parallelRequests": [
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 2000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 2000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 3000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 4000
+          }
+        ],
+        "toolCalls": 59,
+        "skillReads": 2,
+        "helpCalls": 0
+      },
+      "C": {
+        "runs": 12,
+        "completed": 11,
+        "limited": [
+          "R2"
+        ],
+        "contextTokens": 297828,
+        "totalElapsedMs": 218602.84000000003,
+        "parallelLiabilityMicro": 19000,
+        "parallelRequests": [
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/extract",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 1000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 5000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 5000
+          },
+          {
+            "method": "POST",
+            "path": "/v1/search",
+            "liabilityMicro": 5000
+          }
+        ],
+        "toolCalls": 64,
+        "skillReads": 12,
+        "helpCalls": 2
+      }
+    },
+    "existingSmokeLiabilityMicro": 24000,
+    "pilotLiabilityMicro": 5000,
+    "primaryLiabilityMicro": 39000,
+    "totalLiabilityMicro": 68000,
+    "activeReservationMicro": 0,
+    "allRecordedParallelStatuses": [
+      200
+    ],
+    "rawTimeWarning": "Raw elapsed includes unsuccessful runs; justified resolution uses rubric-qualified success and deadline censoring.",
+    "artifactsLimit": "Files written to /work and its HOME persist. Explicit /tmp outputs lived in container tmpfs and are not retained after exit. Their inspected tool outputs and receipts remain in event logs."
+  },
+  "reportingCorrection": "Post-run presentation correction: identify the consensus subset size, show complete 12-pair estimates separately for both raters, and read the exact sign-test p field. No worker, gold, rubric, or scoring threshold changed. Previous renderer and output are retained in data/frozen-reporting/. Grok overlay records copy disputed fields from a named original rater; they do not rewrite rater files or invent agreement."
+}

@@ -1,0 +1,70 @@
+{
+  "generated_utc": "2026-09-22T19:23:50.483Z",
+  "purpose": "Round 2 gold: complete bodies for sources that were excerpt-only in the question-hunt evidence, plus tag-to-commit resolution for immutable citation.",
+  "bodies": [
+    {
+      "id": "landlock",
+      "url": "https://docs.kernel.org/userspace-api/landlock.html",
+      "file": "gold-sources-round2/landlock.body",
+      "http_status": 200,
+      "bytes": 150991,
+      "sha256": "9f00a06635a23218c7cbee40cce3367933879bd4f0cba24d09ee038fa378765d",
+      "retrieved_utc": "2026-09-22T19:23:50.483Z",
+      "capture": "complete_body"
+    },
+    {
+      "id": "jsonschema-validation",
+      "url": "https://json-schema.org/draft/2020-12/json-schema-validation",
+      "file": "gold-sources-round2/jsonschema-validation.body",
+      "http_status": 200,
+      "bytes": 169423,
+      "sha256": "936c23295ef0d7b4c637a16df855ce3ca4df93b5c36ce100515923d26ed145f4",
+      "retrieved_utc": "2026-09-22T19:23:50.483Z",
+      "capture": "complete_body"
+    },
+    {
+      "id": "google-generatecontent",
+      "url": "https://ai.google.dev/api/generate-content",
+      "file": "gold-sources-round2/google-generatecontent.body",
+      "http_status": 200,
+      "bytes": 1232171,
+      "sha256": "b8b6ba0ca3f488d0652ad7fa58e2dc5cd9bdf2de3069d88d6301283a398885f4",
+      "retrieved_utc": "2026-09-22T19:23:50.483Z",
+      "capture": "complete_body"
+    },
+    {
+      "id": "litellm-input",
+      "url": "https://docs.litellm.ai/docs/completion/input",
+      "file": "gold-sources-round2/litellm-input.body",
+      "http_status": 200,
+      "bytes": 99698,
+      "sha256": "2cc49a14580bad6c57c173abfd73aa5b0b26b39c71566fef6e4f60281dbf58ef",
+      "retrieved_utc": "2026-09-22T19:23:50.483Z",
+      "capture": "complete_body"
+    }
+  ],
+  "tag_resolutions": [
+    {
+      "repo": "SetraTheXX/Portal-Doctor",
+      "tag": "v0.2.1",
+      "annotated_tag": "48bc553e53fe652b12e4fa3a0417c14b57f4c58e",
+      "commit": "f40b7bda90809f4c9883b866148e04738949c684",
+      "question": "Q7"
+    },
+    {
+      "repo": "KDE/xdg-desktop-portal-kde",
+      "tag": "v6.7.5",
+      "annotated_tag": "a05ff28e6b39819999bd671d99a4843b4f4acdf6",
+      "commit": "d70e95e1d347070cf6e61731bbcb322402b09155",
+      "question": "Q7"
+    },
+    {
+      "repo": "DeusData/codebase-memory-mcp",
+      "tag": "v0.10.8",
+      "annotated_tag": null,
+      "commit": "46ae198fc11cda80e817acbc5f5908d7c2de7032",
+      "question": "Q4",
+      "note": "matches the commit cited in gradable-questions.md"
+    }
+  ]
+}

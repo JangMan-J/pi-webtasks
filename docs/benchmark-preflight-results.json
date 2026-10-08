@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-20",
+  "purpose": "Rootless Podman compatibility and OAuth refresh smoke test, not a scored benchmark",
+  "status": "passed",
+  "sandbox": {
+    "runtime": "podman",
+    "runtime_version": "6.1.2",
+    "rootless": true,
+    "oci_runtime": "crun",
+    "network_backend": "netavark",
+    "outbound_access": "unrestricted",
+    "public_egress_probe": {"url": "https://example.com", "http_status": 200},
+    "image": "localhost/pi-parallel-smoke:20260920",
+    "image_id": "sha256:a5c80c8e1a0a30c9f57fd5d2f6329fd5949ca716175695b01aa509b9f37225fa",
+    "base_image": "docker.io/library/node:24-bookworm-slim",
+    "node_version": "24.21.0",
+    "python_version": "3.11.2",
+    "pi_version": "0.86.1",
+    "parallel_cli_version": "0.9.3",
+    "parallel_python_sdk_version": "1.3.3",
+    "parallel_node_sdk_version": "1.3.3",
+    "context7_cli_version": "0.5.11",
+    "read_only_root": true,
+    "capabilities_dropped": "all",
+    "no_new_privileges": true
+  },
+  "research_checks": {
+    "native_extension": {"registered_tools": 9, "search": "passed", "extract": "passed", "responses": "passed", "artifacts_saved": true},
+    "cli": {"search": "passed: 2 results", "extract": "passed: 1 result", "responses_helper": "passed: completed response with citations", "helper_adapter": "Only the hardcoded Responses URL was redirected to the spending gateway"},
+    "find_docs": {"library_lookup": "passed: /python/cpython returned", "docs_query": "passed: 4408 characters with source URLs", "authentication": "No Context7 credential supplied", "version_scope": "Connectivity probe against CPython main, not Python 3.12 gold evidence"}
+  },
+  "model_checks": [
+    {"provider": "fireworks", "model": "accounts/fireworks/routers/kimi-k3-fast", "auth_type": "api_key", "inference": "SMOKE_OK"},
+    {"provider": "openai-codex", "model": "gpt-5.5", "auth_type": "oauth", "inference": "SMOKE_OK", "forced_expiry_refresh": "passed", "access_token_rotated": true, "refresh_token_rotated": true, "expiry_advanced": true, "post_refresh_inference": "REFRESH_OK", "host_auth_check_without_refresh": "ready"},
+    {"provider": "xai", "model": "grok-4.6", "auth_type": "oauth", "inference": "SMOKE_OK", "forced_expiry_refresh": "passed", "access_token_rotated": true, "refresh_token_rotated": true, "expiry_advanced": true, "post_refresh_inference": "REFRESH_OK", "host_auth_check_without_refresh": "ready"}
+  ],
+  "refresh_method": "For each OAuth provider, hold Pi FileAuthStorageBackend.withLockAsync on the host, copy only that provider to a writable container profile with expires=0, run pi auth check in the container, then persist the rotated record under the same host lock. Other providers remain unchanged.",
+  "expiry_test_scope": "Forced client-side expiry metadata only. No provider-side token revocation or expiry was requested. Actual refresh endpoints returned rotated access and refresh tokens, followed by successful inference.",
+  "cleanup": {"smoke_containers_running": false, "host_gateway_stopped": true, "disposable_provider_credential_profiles_removed": true, "gateway_token_files_removed": true, "image_retained_for_reuse": true},
+  "isolation_checks": {
+    "host_home_hidden": true,
+    "sibling_workspace_hidden": true,
+    "extension_absent_from_cli_arm": true,
+    "skills_read_only": true,
+    "workspace_writable": true,
+    "cli_skill_count_with_shared_find_docs": 11,
+    "cli_skill_warnings": 0,
+    "shared_find_docs_relative_reference_resolves": true,
+    "real_parallel_key_inside_containers": false
+  },
+  "parallel_spend": {
+    "requests": 6,
+    "all_http_statuses": 200,
+    "search_fast_requests": 2,
+    "single_url_extract_requests": 2,
+    "responses_low_requests": 2,
+    "reserved_liability_usd": 0.024,
+    "smoke_admission_cap_usd": 0.1,
+    "actual_invoice_reconciled": false,
+    "debit_envelope": "contingency",
+    "contingency_allocation_usd": 1,
+    "contingency_remaining_after_liability_usd": 0.976
+  },
+  "evidence_directory": ".pi/sandbox-smoke/20260920-podman",
+  "limitations": [
+    "This proves current inference, forced refresh, selected research operations, and basic mount boundaries. It is not the complete benchmark harness.",
+    "Long-lived autonomous refresh and concurrent refresh owners still need coordinated credential persistence in the benchmark runner.",
+    "The smoke gateway is bounded to simple Search, Extract, and Responses calls. Full crash-safe job accounting and per-run research-ID ownership remain harness work.",
+    "Anthropic and Antigravity were not tested because neither is selected for this benchmark."
+  ]
+}

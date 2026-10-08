@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "label": "Parallel CLI + Pi-adapted skills + parallel-research",
+  "skills_root": "/home/jangpi/.agents/.quarantined/parallel-cli",
+  "upstream_comparison_commit": "26574f44949334bee46ec6bc7a1c4eba9c08c3c2",
+  "cli_commit": "12393045b6a17b32a9a28f68c48f1526066b5c29",
+  "cli_version_observed": "0.9.3",
+  "skill_count": 10,
+  "files_sha256": {
+    "parallel-cli-setup/SKILL.md": "223af6e299dc11e0a1406fef01ccf06153fb6799d56936038192d979921fb5ab",
+    "parallel-data-enrichment/SKILL.md": "47d83584549f65f03bce9d8b114f6c3b78a00edcad2560ed3f1de0f656471b09",
+    "parallel-deep-research/SKILL.md": "61f632253a7b6e4424d4445f4c3309fa4cfd5ffdb75cdea0fd811be4a6ac2dce",
+    "parallel-findall/SKILL.md": "b975a9ff75b8c1eb45bc0b508d199d770a80f48b5aad8b9241ab450d6a659119",
+    "parallel-memory/SKILL.md": "170e1e4fcedd7246426124020c89d068e73b23b6be9c2f64e41138e267360ed6",
+    "parallel-monitor/SKILL.md": "e2a6e8b448ec5851c56615acf6b79d2e7eba771d89838a87300b6578538aa465",
+    "parallel-web-extract/SKILL.md": "1d3775d64ccdd59e88e5ca2280de5d16faf7005394f5464476a7931229f7f651",
+    "parallel-web-search/RESPONSES.md": "35f1d2f19d82e55d30b55b473bafe05a0baa12451a0387e57b555e188383b412",
+    "parallel-web-search/SKILL.md": "2e6b4e09dd897eaee5287348b5e1323f81024a0c87b3583fe2578fc678e9207a",
+    "result/SKILL.md": "b6d2b3911e742a5ac7d526ec31a5c0c2801bfe1221a96dde71d0bcf8529c3439",
+    "status/SKILL.md": "04eaf957c23ccf78c0b0d159467e5f69a0b2db349d95773d96d15085ac65f24e"
+  },
+  "responses_helper": {
+    "path": "/home/jangpi/.local/bin/parallel-research",
+    "sha256": "39d3a594fee1059d25988e6199f99fe5ab6d07e413ad3bf93d2498c806124f37",
+    "endpoint": "https://api.parallel.ai/v1/responses",
+    "base_url_override": false,
+    "transport_requirement": "A logged harness-only URL redirect into the budget gateway, with payload and output parity tests. Keep the source helper unchanged."
+  },
+  "shared_dependency": {
+    "reference": "parallel-web-search/../find-docs/SKILL.md",
+    "source": "/home/jangpi/.agents/skills/find-docs/SKILL.md",
+    "sha256": "2cfc2b3ac1ac150ef084cac53f899ad198a5bf332532a2c88ee83f00996529c2",
+    "decision": "user_selected_shared_find_docs_access",
+    "arms": ["E", "C"],
+    "mount": "Same read-only find-docs skill path in both arms, sibling of CLI skill directories so the existing relative reference resolves.",
+    "service": "Context7 through the documented CLI, identically available and separately logged in both arms",
+    "cli_pin": "Freeze the resolved ctx7 package version and integrity in the executable manifest before any scored dispatch. Do not resolve latest during timed runs.",
+    "effective_skill_counts": {"E": 1, "C": 11},
+    "network_and_cost": "Both arms have unrestricted network access. Log Context7 and other observed public research separately from the $25 Parallel-only ceiling. The Parallel gateway alone holds the real research key. No new subscription or top-up."
+  },
+  "upstream_differences": {
+    "unchanged_skills": ["status"],
+    "modified_skill_count": 9,
+    "added_references": ["parallel-web-search/RESPONSES.md"],
+    "omitted_upstream_skills": ["choose-your-parallel-api", "migrate-to-parallel", "parallel-mcp-setup"]
+  },
+  "activation": "Explicit benchmark loading only. Leave the user's quarantine and installed files unchanged."
+}

@@ -6,13 +6,14 @@ The user asked to switch deep research from mandatory inbound webhooks to outbou
 Implementation and live acceptance were completed on `feature/outbound-completion`.
 Manager fast-forwarded `master` to `e086691` after independently reviewing and verifying the final cleanup fix.
 Later user decision removed `/webtasks`; Manager reviewed, verified, and fast-forwarded `master` to `0a282c1`.
+Latest wording change is integrated through `7f561f3`, plus Manager cleanup of monetary wording in result/error safety messages.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated; no delegated correction remains pending.
 2. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 3. Treat installation/publication and optional receiver deployment as separate work.
-4. If source changes after `0a282c1`, rerun proportionate checks before further integration.
+4. If source changes after this handoff, rerun proportionate checks before further integration.
 
 Find checkout locations with `git worktree list`; use branch names and commit hashes rather than assuming a worktree path.
 Read `docs/release-readiness.md` on the implementation branch for detailed live evidence.
@@ -47,6 +48,10 @@ Do not restart completed acceptance runs or the running comparison.
 - Account/device login, logout, and balance integration are removed; existing credential files remain untouched.
 - Credentials come from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY`, including package-adjacent `.env` or `parallel.env`; environment precedence is unchanged.
 - Failed result GETs retry once at the next owning-session start; watcher/collector passes do not retry them.
+- Model-facing tool guidance has no cost/price references; human-facing price documentation remains.
+- `deep_search` locates hard-to-find facts and produces detailed reports, including when ordinary search fails or the user is dissatisfied.
+- `web_search` guidance directs models to deep research after a few unsuccessful searches instead of repeated searching.
+- No-resubmit safety messages remain, with monetary wording removed.
 - Leave the old store unread; the user accepts leaving its two pending registrations unresolved.
 - Implementation and live testing are authorized; installation, publication, and receiver deployment are separate.
 - Leave the sibling `pi-parallelized` checkout and its unfinished work untouched.
@@ -101,6 +106,7 @@ Important branch commits:
 | `67507c3` | Durable-progress backoff and corrected acceptance records |
 | `e086691` | Release event and snapshot requests on every pass exit |
 | `0a282c1` | Remove commands/account integration; retry failed result GETs once per owning-session start |
+| `7f561f3` | Remove tool-price guidance; reposition deep research |
 
 Manager reruns at `55a0915`: typecheck passed; tests 169/169; `check:all` exit 0, bench 84/84, curate 361 checks.
 Manager reruns at `3450752`: typecheck passed; tests 166/166.
@@ -111,6 +117,9 @@ Three new cleanup tests assert request signals are aborted before collector shut
 Implementer reports mutation checks: all three fail on the unfixed revision; releasing only one request fails the other request's tests.
 Manager rerun at `0a282c1`: `check:all` exit 0, main 174/174, bench 84/84, curate 361 checks.
 New loader assertions verify zero commands; startup retry tests cover successful recovery and repeated failure without watcher-driven retries.
+Manager rerun after `7f561f3` and result/error wording cleanup: `check:all` exit 0, main 175/175, bench 84/84, curate 361 checks.
+Registered-tool text scan covers descriptions, snippets, guidelines, and nested parameter descriptions.
+Whether the revised guidance increases appropriate deep-research use is untested; no further live runs were requested.
 Earlier failures were a test executing before session startup and a stale bench path; both were fixed.
 
 ## Live findings
@@ -178,5 +187,5 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Other CLIs' charges are unknown.
   Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
-- `master` includes the accepted implementation through `0a282c1`.
+- `master` includes the accepted implementation through `7f561f3` and Manager result/error wording cleanup.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

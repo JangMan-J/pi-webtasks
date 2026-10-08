@@ -375,7 +375,7 @@ export async function interactiveSearch(ctx: CallContext, session: ResearchSessi
       const status = typeof id === "string" && partial ? "partial" : "uncertain";
       const saveError = await remember({ status, response_id: typeof id === "string" ? id : undefined, artifact: failed?.artifact ?? undefined, error: formatError(err).slice(0, 500) });
       const notice = (failed as any)?.notice ?? formatError(err);
-      throw new Error(`${notice}\nConversation: ${ref} (${status}${saveError ? "; not saved locally" : ""}). Do not repeat the question automatically; the outcome may already be paid for.${failed?.artifact ? `\nSaved: ${failed.artifact}` : ""}`);
+      throw new Error(`${notice}\nConversation: ${ref} (${status}${saveError ? "; not saved locally" : ""}). Do not repeat the question automatically; the service may already have accepted it.${failed?.artifact ? `\nSaved: ${failed.artifact}` : ""}`);
     }
     const data = await readJson(receipt.artifact);
     const id: unknown = data?.response?.id ?? (receipt as any).control?.response_id;

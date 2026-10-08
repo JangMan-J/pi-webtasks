@@ -456,7 +456,7 @@ export function preview(data: unknown, artifact: string | null, args: Obj = {}, 
   const receipt: Receipt = {
     artifact, return_mode: mode, omitted: true,
     notice: saveError ? "Artifact save failed. Do not repeat the API request. Response bodies are omitted." :
-      "Only selected fields are returned. Read selected artifact fields locally; never repeat a paid request to recover omitted content. Secret fields are redacted. Files persist until removed.",
+      "Only selected fields are returned. Read selected artifact fields locally; never repeat a request to recover omitted content. Secret fields are redacted. Files persist until removed.",
   };
   const fits = () => jsonSize(receipt) <= limit;
   const remaining = (reserve = 0) => Math.max(0, limit - jsonSize(receipt) - reserve);
@@ -710,7 +710,7 @@ function failureNotice(data: unknown, control: Obj): string {
   const existing = Object.keys(control).some(k => /(^|\.)(run_ids?|findall_id|monitor_id|taskgroup_id|response_id|creation_artifact)$/.test(k));
   if (existing) return `Request failed: ${short} The resource already exists. Do not create it again; continue with its ID.`;
   if (status === 408 || (status ?? 0) >= 500 || (status === undefined && /timed? ?out|abort/i.test(message))) {
-    return `Request failed: ${short} Completion is uncertain. Check saved artifacts or existing IDs before a paid retry.`;
+    return `Request failed: ${short} Completion is uncertain. Check saved artifacts or existing IDs before retrying.`;
   }
   return `Request failed: ${short} Nothing was created. Fix the arguments or setup named in the error, then retry.`;
 }

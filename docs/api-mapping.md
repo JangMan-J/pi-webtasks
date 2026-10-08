@@ -250,7 +250,7 @@ session_start
   -> resolve Pi session ID
   -> lookup its existing research association
   -> hydrate runtime groupId and attach recovery
-  -> record local session metadata (ID, cwd, artifact directory) in the store
+  -> no session row written
   -> no group row inserted and no remote group creation
 
 deep submission
@@ -269,7 +269,7 @@ session switch/reload
 Only sessions that submit deep research get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
-SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds one session metadata row; group associations exist only for sessions that submit deep research.
+SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research.
 Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
 Session stop aborts and settles the collector. It does not close the remote group or drain research.
 

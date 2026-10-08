@@ -55,7 +55,7 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve, join } from "node:path";
-import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
+import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup } from "./research-types.ts";
 
 export type ResourceKind = "task" | "findall" | "monitor";
 
@@ -164,14 +164,6 @@ type ResearchRow = {
   artifact: string | null;
   creation_artifact: string | null;
   error: string | null;
-  created_at: number;
-  updated_at: number;
-};
-
-type PiSessionRow = {
-  session_id: string;
-  cwd: string;
-  artifact_dir: string;
   created_at: number;
   updated_at: number;
 };
@@ -368,15 +360,6 @@ function decodeProviderIds(raw: string | null): SearchActivity["provider_ids"] {
   return out;
 }
 
-function rowToPiSession(row: PiSessionRow): SessionRecord {
-  return {
-    session_id: row.session_id,
-    cwd: row.cwd,
-    artifact_dir: row.artifact_dir,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
 
 function rowToActivity(row: SearchActivityRow): SearchActivity {
   return {
@@ -528,6 +511,8 @@ export class WebhookInbox {
     const researchCols = (db.prepare("PRAGMA table_info(research)").all() as { name: string }[]).map(c => c.name);
     if (!researchCols.includes("interaction_id")) db.exec("ALTER TABLE research ADD COLUMN interaction_id TEXT");
     if (!researchCols.includes("parent")) db.exec("ALTER TABLE research ADD COLUMN parent TEXT");
+    // Legacy table from the earlier per-session metadata row. Nothing writes or reads it now; it stays so
+    // existing databases open unchanged. No DROP.
     db.exec(`
       CREATE TABLE IF NOT EXISTS pi_sessions (
         session_id TEXT PRIMARY KEY,
@@ -606,10 +591,6 @@ export class WebhookInbox {
       listResearchForSession: db.prepare("SELECT * FROM research WHERE session_id = ? ORDER BY created_at ASC"),
       insertResearch: db.prepare(
         "INSERT INTO research (reference, session_id, group_id, run_id, interaction_id, parent, query, effort, domains_json, status, artifact_dir, cwd, artifact, creation_artifact, error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ),
-      getPiSession: db.prepare("SELECT * FROM pi_sessions WHERE session_id = ?"),
-      insertPiSession: db.prepare(
-        "INSERT INTO pi_sessions (session_id, cwd, artifact_dir, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
       ),
       insertActivity: db.prepare(
         "INSERT INTO search_activity (reference, session_id, kind, query, provider_ids_json, status, artifact, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -844,7 +825,7 @@ export class WebhookInbox {
   }
 
   // --- Session groups, research, and conversations ---
-  // A session row exists only after the first deep submission calls beginSessionGroup.
+  // A group row exists only after the first deep submission calls beginSessionGroup.
   // getSessionGroup is lookup-only and never inserts.
 
   async getSessionGroup(sessionId: string): Promise<SessionGroup | undefined> {
@@ -1094,32 +1075,6 @@ export class WebhookInbox {
     await this.init();
     const row = this.stmts.getConversation!.get(reference) as ConversationRow | undefined;
     return row ? rowToConversation(row) : undefined;
-  }
-
-  /** Search/extract session metadata only. Does not create or alter a deep-research group. */
-  async upsertSession(record: SessionRecord): Promise<void> {
-    await this.init();
-    const session_id = requireText(record.session_id, "session id");
-    const cwd = requireText(record.cwd, "cwd");
-    const artifact_dir = requireText(record.artifact_dir, "artifact_dir");
-    const created_at = requireTime(record.created_at, "created_at");
-    const updated_at = requireTime(record.updated_at, "updated_at");
-    this.tx(() => {
-      const existing = this.stmts.getPiSession!.get(session_id) as PiSessionRow | undefined;
-      if (!existing) {
-        this.stmts.insertPiSession!.run(session_id, cwd, artifact_dir, created_at, updated_at);
-        return;
-      }
-      this.db!.prepare(
-        "UPDATE pi_sessions SET cwd = ?, artifact_dir = ?, updated_at = ? WHERE session_id = ?",
-      ).run(cwd, artifact_dir, updated_at, session_id);
-    });
-  }
-
-  async getSession(sessionId: string): Promise<SessionRecord | undefined> {
-    await this.init();
-    const row = this.stmts.getPiSession!.get(sessionId) as PiSessionRow | undefined;
-    return row ? rowToPiSession(row) : undefined;
   }
 
   async saveSearchActivity(record: SearchActivity): Promise<void> {

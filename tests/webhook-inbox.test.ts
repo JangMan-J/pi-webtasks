@@ -467,16 +467,24 @@ test("current research rows gain interaction and parent columns without losing l
   assert.equal((await inbox.getResearch("research_old"))?.run_id, "trun_old");
 });
 
-test("session upsert does not create a deep-research group and keeps the first created_at", async t => {
+test("a database with the legacy pi_sessions table opens unchanged; nothing reads or writes that table", async t => {
   const dir = await tmp(t);
-  const inbox = new WebhookInbox(dir);
-  await inbox.upsertSession({ session_id: "s-search", cwd: "/work", artifact_dir: "/results", created_at: 10, updated_at: 10 });
-  assert.equal(await inbox.getSessionGroup("s-search"), undefined);
-  await inbox.upsertSession({ session_id: "s-search", cwd: "/other", artifact_dir: "/other-results", created_at: 99, updated_at: 20 });
-  const session = await inbox.getSession("s-search");
-  assert.deepEqual(session, { session_id: "s-search", cwd: "/other", artifact_dir: "/other-results", created_at: 10, updated_at: 20 });
-  assert.equal(await inbox.getSessionGroup("s-search"), undefined);
-  assert.equal(await inbox.getSession("missing"), undefined);
+  const first = new WebhookInbox(dir);
+  await first.init();
+  await first.close();
+  const legacy = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  legacy.prepare("INSERT INTO pi_sessions (session_id, cwd, artifact_dir, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("s-legacy", "/work", "/results", 10, 10);
+  legacy.close();
+  const reopened = new WebhookInbox(dir);
+  t.after(() => reopened.close());
+  assert.equal(await reopened.getSessionGroup("s-legacy"), undefined, "no group is implied by the legacy row");
+  assert.equal(await reopened.getSessionGroup("s-search"), undefined);
+  const check = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  try {
+    assert.equal((check.prepare("SELECT COUNT(*) AS n FROM pi_sessions").get() as { n: number }).n, 1, "the legacy row is kept, not dropped");
+  } finally {
+    check.close();
+  }
 });
 
 test("search activity is an immutable meta row and rejects payloads or unknown ids", async t => {

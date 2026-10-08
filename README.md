@@ -120,7 +120,7 @@ The backend has no group-close operation.
 Research state uses the existing `webhooks.sqlite` store, created automatically and kept private.
 `PIPARA_WEBHOOK_DIR` selects the location when set.
 Otherwise the store is `getAgentDir()/parallelized/webhooks/webhooks.sqlite`.
-Each started Pi session records one small metadata row (ID, working directory, artifact directory) in that store. This is not a remote registry; startup creates no group and sends no request.
+Startup is lookup-only. It writes no session row, creates no remote group, and sends no request. Ownership and resume use the research records and the session's group row.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
 

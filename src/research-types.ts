@@ -10,15 +10,6 @@ export type ResearchStatus =
 
 export type Effort = "low" | "medium" | "high";
 
-/** Local Pi identity. Search/Extract receive this same ID as contextual session_id. */
-export type SessionRecord = {
-  session_id: string;
-  cwd: string;
-  artifact_dir: string;
-  created_at: number;
-  updated_at: number;
-};
-
 /** Small terminal request log; full source text and payloads stay in artifact files. */
 export type SearchActivity = {
   reference: string;

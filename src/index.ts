@@ -122,8 +122,8 @@ export default function piWebtasks(pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     await stopRuntime();
     const sessionId = ctx.sessionManager.getSessionId();
-    // Startup records this session locally, warms the group cache, and attaches recovery. It never
-    // creates a remote group or sends any request. The collector starts only with a ready group.
+    // Startup is lookup-only: it writes no session row, creates no remote group, and sends no request.
+    // It warms the group cache and attaches recovery. The collector starts only with a ready group.
     const storeDir = storeDirectory();
     const runtime: Runtime = { sessionId, released: false, session: undefined as never };
     runtime.session = new ResearchSession({
@@ -139,12 +139,6 @@ export default function piWebtasks(pi: ExtensionAPI) {
     rt = runtime;
     const inbox = runtime.inbox = new WebhookInbox(storeDir);
     const artifactDir = callContext(ctx).artifactDir;
-    try {
-      const now = Date.now();
-      await inbox.upsertSession({ session_id: sessionId, cwd: ctx.cwd, artifact_dir: artifactDir, created_at: now, updated_at: now });
-    } catch (err) {
-      if (ctx.hasUI) ctx.ui.notify(`Session metadata was not recorded: ${formatError(err)}`, "warning");
-    }
     await runtime.session.hydrate().catch(() => {}); // lookup only
     runtime.consumer = new WebhookConsumer({
       inbox,

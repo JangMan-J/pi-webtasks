@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { WebhookInbox } from "../src/webhook-inbox.ts";
 import { setup, type Call } from "./helpers/test-host.ts";
 
@@ -459,7 +460,17 @@ function retrievalHost(overrides: Record<string, (call: Call) => Response> = {})
       : json({ error: `unexpected ${call.path}` }, 500));
 }
 
-test("every session start records local metadata in the store without any remote request; reload keeps the ID, new sessions get their own", async t => {
+/** Row count of one of the store's own tables, read on a separate connection. */
+function rowCount(dir: string, table: "pi_sessions" | "session_groups"): number {
+  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  try {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+  } finally {
+    db.close();
+  }
+}
+
+test("session start is lookup-only: no session row, no group, no request; reload and a new session stay independent", async t => {
   for (const configured of [false, true]) {
     const dir = configured ? await tmp("meta") : undefined;
     const h = await setup(t, retrievalHost(), { webhookDir: dir });
@@ -467,15 +478,14 @@ test("every session start records local metadata in the store without any remote
     await h.start();
     const db = await store(h.inboxDir);
     t.after(() => db.close());
-    const first = (await db.getSession("session-a"))!;
-    assert.equal(first.cwd, h.dir);
-    assert.equal(first.artifact_dir, join(h.dir, "agent", "webtasks", "results"));
+    assert.equal(rowCount(h.inboxDir, "pi_sessions"), 0, "a fresh start writes no session row");
+    assert.equal(rowCount(h.inboxDir, "session_groups"), 0, "a fresh start writes no group row");
     assert.equal(await db.getSessionGroup("session-a"), undefined, "no group row before the first deep submission");
     await h.stop();
     await (await h.instance("session-a")).start();
     await (await h.instance("session-b")).start(); // a new or forked session
-    assert.ok(await db.getSession("session-a"));
-    assert.equal((await db.getSession("session-b"))!.session_id, "session-b");
+    assert.equal(rowCount(h.inboxDir, "pi_sessions"), 0, "reload and a new session write no session row");
+    assert.equal(await db.getSessionGroup("session-b"), undefined, "a new session has no group until it submits");
     assert.equal(h.calls.length, 0, "startup sends nothing to the provider");
   }
 });

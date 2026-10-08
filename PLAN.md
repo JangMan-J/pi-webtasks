@@ -215,7 +215,7 @@ The old runtime-lifetime closure contract is superseded by the start/stop hook d
 2. Hydrate the per-session runtime group ID if a saved group exists.
 3. Attach the session's local inbox consumer and deliver saved, undelivered outcomes.
 
-Startup is lookup-only for groups: it never creates a group and sends no request. It records one local metadata row per started session (ID, working directory, artifact directory) in the existing store.
+Startup is lookup-only. Do not create a group or insert a session row for a fresh session.
 
 ### First deep submission
 

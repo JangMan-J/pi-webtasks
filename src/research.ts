@@ -8,7 +8,7 @@ import type Parallel from "parallel-web";
 import { extract, findall, formatError, responses, search } from "./ops.ts";
 import { ArtifactError, getPreviewLimit, researchOutput, researchReceipt, type Receipt } from "./results.ts";
 import { presentEvidence } from "./evidence.ts";
-import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, SearchActivity, SessionGroup, SessionRecord } from "./research-types.ts";
+import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, SearchActivity, SessionGroup } from "./research-types.ts";
 
 /** Persistence needed here; WebhookInbox provides it. Calls are async. */
 export type ResearchStore = {
@@ -26,8 +26,6 @@ export type ResearchStore = {
   adoptEventCursor(reference: string, cursor: string): Promise<boolean>;
   saveConversation(record: ConversationRecord): Promise<unknown>;
   getConversation(reference: string): Promise<ConversationRecord | undefined>;
-  upsertSession(record: SessionRecord): Promise<unknown>;
-  getSession(sessionId: string): Promise<SessionRecord | undefined>;
   saveSearchActivity(record: SearchActivity): Promise<unknown>;
   activitiesForSession(sessionId: string): Promise<SearchActivity[]>;
 };

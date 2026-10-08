@@ -37,7 +37,7 @@ function fullContentRequested(args: Record<string, unknown>): boolean {
 }
 
 // Presentation only: keep the API response, source order and legacy receipt intact.
-export async function presentEvidence(receipt: Receipt, args: Record<string, unknown>, format = process.env.PIPARA_OUTPUT_FORMAT ?? "readable"): Promise<{ text: string; readableArtifact?: string }> {
+export async function presentEvidence(receipt: Receipt, args: Record<string, unknown>, format = process.env.WEBTASKS_OUTPUT_FORMAT ?? "readable"): Promise<{ text: string; readableArtifact?: string }> {
   const legacy = { text: JSON.stringify(receipt, null, 2) };
   if (format !== "readable" || !receipt.artifact) return legacy;
   const previewLimit = getPreviewLimit(args);

@@ -189,11 +189,11 @@ test("web_search query and URL paths switch presentation without changing reques
   for (const [name, args] of [["web_search", { query: "official policy" }], ["web_search", { urls: [source.url] }]] as const) {
     const tool = h.tools.get(name);
     const schema = JSON.stringify(tool.parameters);
-    delete process.env.PIPARA_OUTPUT_FORMAT; // Readable is the default.
+    delete process.env.WEBTASKS_OUTPUT_FORMAT; // Readable is the default.
     const readable = await tool.execute("readable", args, undefined, undefined, h.ctx);
     assert.match(readable.content[0].text, /## Source 1: Official policy/);
     assert.ok(readable.details.readable_artifact);
-    process.env.PIPARA_OUTPUT_FORMAT = "json";
+    process.env.WEBTASKS_OUTPUT_FORMAT = "json";
     const legacy = await tool.execute("json", args, undefined, undefined, h.ctx);
     assert.ok(JSON.parse(legacy.content[0].text).preview.results);
     assert.equal(legacy.details.readable_artifact, undefined);

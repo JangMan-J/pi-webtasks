@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -44,6 +45,22 @@ test("exactly three tools with closed schemas and no backend vocabulary", async 
     const surface = JSON.stringify([tool.description, tool.promptSnippet, tool.promptGuidelines, tool.parameters]);
     assert.doesNotMatch(surface, /processor|taskgroup|run_id|webhook|response_id|\b(base|core|pro|ultra)\b|parallel/i);
   }
+});
+
+test("one command, /webtasks: no argument lists its subcommands; unknown names get the same list; the store is under webtasks/", async t => {
+  const h = await setup(t, () => json({}));
+  await h.start();
+  assert.deepEqual([...h.commands.keys()], ["webtasks"]);
+  assert.equal(existsSync(join(h.dir, "agent", "webtasks", "webtasks.sqlite")), true, "the default store is agent/webtasks/webtasks.sqlite");
+  assert.equal(existsSync(join(h.dir, "agent", "parallelized")), false, "no legacy directory is created");
+  const notes: string[] = [];
+  const ctx = { ...h.ctx, ui: { notify: (m: string) => notes.push(m) } };
+  await h.commands.get("webtasks").handler("", ctx);
+  assert.match(notes[0]!, /^Usage: \/webtasks <command>/);
+  for (const sub of ["status", "recover", "login", "logout", "balance"]) assert.match(notes[0]!, new RegExp(`^  ${sub} `, "m"));
+  await h.commands.get("webtasks").handler("parallel-balance", ctx);
+  assert.match(notes[1]!, /^Unknown command "parallel-balance"\.\nUsage: \/webtasks <command>/);
+  assert.equal(h.calls.length, 0, "the listing and unknown names make no request");
 });
 
 test("invalid input is rejected before any network request or setup", async t => {
@@ -462,7 +479,7 @@ function retrievalHost(overrides: Record<string, (call: Call) => Response> = {})
 
 /** Row count of the store's group table, read on a separate connection. */
 function groupRows(dir: string): number {
-  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const db = new DatabaseSync(join(dir, "webtasks.sqlite"));
   try {
     return (db.prepare("SELECT COUNT(*) AS n FROM session_groups").get() as { n: number }).n;
   } finally {
@@ -472,7 +489,7 @@ function groupRows(dir: string): number {
 
 /** Whether the store has the per-session table from earlier builds. It is dropped when the store opens. */
 function hasSessionTable(dir: string): boolean {
-  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const db = new DatabaseSync(join(dir, "webtasks.sqlite"));
   try {
     return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pi_sessions'").all().length > 0;
   } finally {

@@ -12,7 +12,7 @@ import { Parallel } from "parallel-web";
 import { WebhookInbox, DONE_RETENTION_MS } from "../src/webhook-inbox.ts";
 import { WebhookConsumer } from "../src/webhook-consumer.ts";
 import { WebhookWorker, TASK_META, providerInteractionId, taskIdentity } from "../src/webhook-worker.ts";
-import { DEFAULT_WEBHOOK_HOST, WEBHOOK_DIR_ENV, WEBHOOK_PORT_ENV, WEBHOOK_SECRET_ENV, startWebhookReceiver } from "../src/webhook-receiver.ts";
+import { DEFAULT_WEBHOOK_HOST, WEBTASKS_DIR_ENV, WEBHOOK_PORT_ENV, WEBHOOK_SECRET_ENV, startWebhookReceiver } from "../src/webhook-receiver.ts";
 import type { ResearchRecord } from "../src/research-types.ts";
 
 const REAL_FETCH = globalThis.fetch;
@@ -84,7 +84,7 @@ async function deliver(url: string, id: string, event: unknown) {
   return res;
 }
 async function age(dir: string, webhookId: string, handledAt: number) {
-  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const db = new DatabaseSync(join(dir, "webtasks.sqlite"));
   db.prepare("UPDATE events SET handled_at = ?, received_at = ? WHERE webhook_id = ?").run(handledAt, handledAt, webhookId);
   db.close();
 }
@@ -407,8 +407,8 @@ test("a routable fetch failure is durable and does not crash the receiver when t
 
 test("standalone receiver starts without an API key and shuts the in-process worker down", async t => {
   const dir = await tmpDir(t);
-  const env = { ...process.env, [WEBHOOK_SECRET_ENV]: SECRET, [WEBHOOK_DIR_ENV]: dir, [WEBHOOK_PORT_ENV]: "0" };
-  delete env.PIPARA_API_KEY;
+  const env = { ...process.env, [WEBHOOK_SECRET_ENV]: SECRET, [WEBTASKS_DIR_ENV]: dir, [WEBHOOK_PORT_ENV]: "0" };
+  delete env._PARALLEL_API_KEY;
   delete env.PARALLEL_API_KEY;
   const child = spawn(process.execPath, [RECEIVER_FILE], { env, stdio: ["ignore", "pipe", "pipe"] });
   t.after(() => { if (!child.killed) child.kill("SIGKILL"); });

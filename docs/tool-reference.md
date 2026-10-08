@@ -1,4 +1,4 @@
-# Parallel tool reference
+# pi-webtasks tool reference
 
 Read the relevant section for output-handling details, advanced TaskSpec formats, or higher-tier Task prices. Routine calls do not require this reference.
 
@@ -9,7 +9,7 @@ Read saved artifacts for omitted content. Never repeat a paid request to recover
 The public tools accept none of `return_mode`, `preview_chars`, `output_path`, `overwrite`, or the retrieval controls below. They apply the defaults shown. The table documents the earlier low-level interface.
 
 Research tools save the complete collected response as JSON, with credential fields redacted. Retrieval limits still control what the API returns.
-The public tools save artifacts under `getAgentDir()/webtasks/results/`, which follows Pi configuration, including `PI_CODING_AGENT_DIR`. Artifacts from the earlier low-level tools remain under `getAgentDir()/parallelized/results/`. Artifacts persist until the user removes them.
+The public tools save artifacts under `getAgentDir()/webtasks/results/`, which follows Pi configuration, including `PI_CODING_AGENT_DIR`. Artifacts from earlier builds are not read or moved. Artifacts persist until the user removes them.
 
 | Field | Behavior |
 | --- | --- |
@@ -77,7 +77,7 @@ This section describes the legacy per-call webhook controls for existing tools.
 The three-tool `deep_search` path completes through outbound collection and needs no callback; see [api-mapping](api-mapping.md#outbound-completion).
 Webhooks are optional.
 
-With `PIPARA_WEBHOOK_URL` and `PIPARA_WEBHOOK_DIR` configured, new Task, Group, FindAll, and Monitor runs receive callbacks automatically.
+With `WEBTASKS_WEBHOOK_URL` and `WEBTASKS_DIR` configured, new Task, Group, FindAll, and Monitor runs receive callbacks automatically.
 When the notice fits, the creation receipt reports local registration. A verified completion saves the result artifact and wakes the owning session.
 Do not poll or recreate a run while awaiting that notification. Read the artifact named in the follow-up.
 

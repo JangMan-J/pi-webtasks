@@ -227,12 +227,12 @@ if (defaultPreview?.findall_id) {
 await use("memory.clear_final", "memory", { action: "clear", memory_scope_key: scope });
 if (!report.balance_command) {
   const notices: { text: string; level: string }[] = [];
-  await commands.get("parallel-balance").handler("", { ...ctx, ui: { ...ctx.ui, notify(text: string, level: string) { notices.push({ text, level }); } } });
+  await commands.get("webtasks").handler("balance", { ...ctx, ui: { ...ctx.ui, notify(text: string, level: string) { notices.push({ text, level }); } } });
   assert.equal(notices[0]?.level, "info");
   assert.equal(typeof JSON.parse(notices[0].text).credit_balance_cents, "number");
   report.balance_command = { state: "passed" };
 }
 report.finished = new Date().toISOString();
-report.offline_only = ["account.add_credit", "parallel-login (device flow helpers tested offline)", "parallel-logout (isolated credentials tested offline)", "webhook signatures"];
+report.offline_only = ["account.add_credit", "/webtasks login (device flow helpers tested offline)", "/webtasks logout (isolated credentials tested offline)", "webhook signatures"];
 await save();
 console.log(JSON.stringify({ report: reportPath, reserved_usd: report.reserved_usd, counts: Object.values(report.steps).reduce((out: any, s: any) => { out[s.state] = (out[s.state] || 0) + 1; return out; }, {}) }));

@@ -37,11 +37,13 @@ They do not establish acceptance of the three-command interface.
 
 ## Credentials
 
-Use the existing `_PARALLEL_API_KEY` environment variable. `PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
+Use the existing `_PARALLEL_API_KEY` environment variable (`PARALLEL_API_KEY` is also accepted). `PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
 The latter is the signing secret, not the research key.
-Explicit `PIPARA_API_KEY` and `PIPARA_WEBHOOK_SECRET` remain supported for compatibility.
-Exported settings take precedence over adjacent `.env` or `parallel.env` defaults.
+Exported settings take precedence over adjacent `.env` or `parallel.env` key files.
 Credential files are not packaged or committed.
+
+Account sign-in is `/webtasks login`; `/webtasks logout` and `/webtasks balance` act on the same account.
+The device login stores its token in `~/.config/pi-webtasks/account.json`. The earlier `pi-parallelized` account file is not read, so sign in again after this rename.
 
 Do not paste credential values into tool arguments, diagnostics, or source files.
 The extension does not create accounts, keys, credit purchases, or monitors.
@@ -117,11 +119,10 @@ Session stop aborts the outbound collector, waits for it to settle, saves accept
 A replacement runtime resumes collection from the stored cursor.
 The backend has no group-close operation.
 
-Research state uses the existing `webhooks.sqlite` store, created automatically and kept private.
-`PIPARA_WEBHOOK_DIR` selects the location when set.
-Otherwise the store is `getAgentDir()/parallelized/webhooks/webhooks.sqlite`.
+Research state uses the `webtasks.sqlite` store, created automatically and kept private.
+`WEBTASKS_DIR` selects the directory when set. Otherwise the store is `getAgentDir()/webtasks/webtasks.sqlite`.
+Earlier stores are not read or migrated.
 Startup is lookup-only. It writes no session row, creates no remote group, and sends no request. Ownership and resume use the research records and the session's group row.
-Opening a store drops the `pi_sessions` table from earlier builds, which nothing reads; research, group, and event rows are kept.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
 
@@ -130,7 +131,7 @@ Existing accepted work and artifacts remain accessible.
 Status: implemented on this branch; live acceptance is pending.
 Live provider SSE and real model navigation are not verified. Offline tests use fake clients only.
 
-`deep_search` needs only provider credentials (`_PARALLEL_API_KEY`, or the compatible `PIPARA_API_KEY`) and the automatic private SQLite store.
+`deep_search` needs only provider credentials (`_PARALLEL_API_KEY`, or `PARALLEL_API_KEY`) and the automatic private SQLite store.
 It needs no callback URL, listener, tunnel, public route, or signing secret.
 
 A collector inside the owning Pi session watches the session's Task Group.
@@ -151,14 +152,13 @@ Notification is acknowledged only after delivery. Exactly-once notification is n
 ## Optional webhook receiver
 
 Signed webhooks are optional.
-With `PIPARA_WEBHOOK_URL`, a shared `PIPARA_WEBHOOK_DIR`, and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry a per-run webhook.
+With `WEBTASKS_WEBHOOK_URL`, a shared `WEBTASKS_DIR`, and a running receiver (`PARALLEL_WEBHOOK_KEY`), runs also carry a per-run webhook.
 The same run seen through both paths is notified once per reported status. A concurrent duplicate result fetch across processes is still possible; it is an idempotent read that can add one extra artifact, and no paid request repeats.
 The receiver's shared worker can then save results while Pi is closed.
-Legacy accepted work and `/parallel-webhook` recovery remain supported.
+Legacy accepted work is recovered with `/webtasks recover`.
 Loading the extension starts no HTTP listener.
 
-The currently installed process still runs the installed `pi-parallelized` receiver.
-Changing files in this checkout does not update that process.
+A receiver installed from the earlier `pi-parallelized` checkout is not verified on this machine. Its location is absent under this account and may belong to another account. Changing files in this checkout does not update any running process.
 The [webhook guide](docs/webhook-integration.md) describes the optional configuration and recovery.
 
 ## Limits

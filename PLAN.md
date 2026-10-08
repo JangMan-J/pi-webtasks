@@ -4,6 +4,7 @@ Status: implementation authorized. Tool coverage remains subject to [the mapping
 Installation, publication, and changes to the running receiver remain separate.
 Outbound completion and existing SQLite persistence are the design direction.
 Latest user decision ("switch us over") supersedes the earlier webhook-first decision.
+Latest user decision (rename): the project is pi-webtasks in every user-facing name. The store is `getAgentDir()/webtasks/webtasks.sqlite`, with results in `getAgentDir()/webtasks/results`. Settings use the `WEBTASKS_*` prefix, with `WEBTASKS_DIR` as the store directory. No `PIPARA_*` names or aliases remain, and no earlier store, results directory, or account file is read or migrated. The only user-facing command is `/webtasks` with `status`, `recover`, `login`, `logout`, and `balance`. The provider's own credential names (`_PARALLEL_API_KEY`, `PARALLEL_WEBHOOK_KEY`) are kept. This supersedes "The plan does not rename unrelated deployment settings" and the compatibility environment names.
 `deep_search` completes through outbound Task Group SSE with bounded background polling fallback, and mandatory webhooks are removed.
 This is implemented on branch `feature/outbound-completion`; live acceptance is pending.
 Live provider SSE and real model navigation are not verified. Only offline tests with fake clients exist.
@@ -352,8 +353,8 @@ Rules:
   The replacement runtime rehydrates and resumes from the stored cursor. No remote group close occurs.
 
 Optional signed webhooks:
-If `PIPARA_WEBHOOK_URL` is set with a shared `PIPARA_WEBHOOK_DIR` and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry the per-run webhook.
-Legacy accepted work and `/parallel-webhook` recovery remain supported.
+If `WEBTASKS_WEBHOOK_URL` is set with a shared `WEBTASKS_DIR` and a running receiver (`PARALLEL_WEBHOOK_KEY`), runs also carry the per-run webhook.
+Legacy accepted work is recovered with `/webtasks recover`.
 The receiver's shared worker is an optional accelerator for offline collection, not a requirement.
 Only handled and notified entries are pruned after 72 hours; unmatched callbacks and unacknowledged notifications remain retained.
 
@@ -453,7 +454,7 @@ Implementation is now authorized. Limit paid scenarios to targeted acceptance or
 
 Use the later system-name correction for credential integration: `_PARALLEL_API_KEY` and `PARALLEL_WEBHOOK_KEY`.
 Do not invent replacement credential names for the new package.
-The plan does not rename unrelated deployment settings.
+Superseded by the latest user decision on the rename, at the top of this plan.
 
 ### Remaining interface review
 

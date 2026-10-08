@@ -1,4 +1,4 @@
-# Parallel webhook integration
+# pi-webtasks webhook integration
 
 > Note: deep research completes through outbound Task Group SSE with polling fallback inside the owning session; see [outbound completion](api-mapping.md#outbound-completion).
 > Webhooks are optional. This guide applies only when you choose to run the signed receiver.
@@ -14,7 +14,7 @@ The older [research review](webhook-integration-review.md) records historical fi
 - `src/webhook-receiver.ts`: one shared HTTP receiver, with signature verification and a bounded request body.
 - `src/webhook-inbox.ts`: a private SQLite inbox, resource ownership records, duplicate detection, and processing claims.
 - `src/webhook-consumer.ts`: event-driven result retrieval and pending notifications.
-- `src/index.ts`: resource registration, session lifecycle, notification delivery, and the `/parallel-webhook` command.
+- `src/index.ts`: resource registration, session lifecycle, notification delivery, and the `/webtasks` command.
 
 The receiver stores authenticated events before it acknowledges them.
 A callback can arrive before the creation response. The consumer retains it until the local resource registration appears.
@@ -22,18 +22,20 @@ Only the owning session can retrieve and receive that resource's result.
 
 ## Configuration
 
-The receiver and Pi must use the same `PIPARA_WEBHOOK_DIR`.
-A conventional location is `<agent-dir>/parallelized/webhooks`.
-The directory is explicit so separate profiles do not accidentally share an inbox.
+The receiver and Pi must use the same `WEBTASKS_DIR`.
+The default location is `<agent-dir>/webtasks`.
+The directory is explicit so separate profiles do not accidentally share a store.
 
 | Setting | Used by | Meaning |
 | --- | --- | --- |
-| `PIPARA_WEBHOOK_DIR` | Receiver and Pi | Shared inbox directory. Enables the Pi consumer when set. |
-| `PIPARA_WEBHOOK_URL` | Pi | Public callback URL for new Tasks, Group runs, FindAll runs, and Monitors. Requires the inbox directory. |
-| `PIPARA_WEBHOOK_SECRET` | Receiver | Existing account signing secret. Not a Parallel API key. |
-| `PIPARA_WEBHOOK_SCHEME` | Receiver | `standard` by default. Use `legacy` only for the documented legacy scheme. |
-| `PIPARA_WEBHOOK_PORT` | Receiver | Port number, default `8787`. |
-| `PIPARA_WEBHOOK_PATH` | Receiver | Request path, default `/parallel/webhook`. |
+| `WEBTASKS_DIR` | Receiver and Pi | Store directory shared by the receiver and Pi. Default `<agent-dir>/webtasks`. The standalone receiver requires it. |
+| `WEBTASKS_WEBHOOK_URL` | Pi | Optional public callback URL for new Tasks, Group runs, FindAll runs, and Monitors. |
+| `PARALLEL_WEBHOOK_KEY` | Receiver | Existing account signing key, under the provider's name. Not a Parallel API key. |
+| `WEBTASKS_WEBHOOK_SCHEME` | Receiver | `standard` by default. Use `legacy` only for the documented legacy scheme. |
+| `WEBTASKS_WEBHOOK_PORT` | Receiver | Port number, default `8787`. |
+| `WEBTASKS_WEBHOOK_PATH` | Receiver | Request path, default `/webtasks/webhook`. |
+
+The default path changed with the rename. A public route that still forwards to `/parallel/webhook` must set `WEBTASKS_WEBHOOK_PATH=/parallel/webhook`, or be re-pointed to `/webtasks/webhook`.
 
 Provide the signing secret through the receiver's environment or a secret manager.
 Do not put it in tool arguments, source files, or a model conversation.
@@ -44,14 +46,14 @@ Existing environment variables take precedence, including explicit empty values.
 Start one shared receiver:
 
 ```sh
-npm run webhook:receiver
+npm run webtasks:receiver
 ```
 
-The standalone receiver binds `http://127.0.0.1:8787/parallel/webhook` by default.
+The standalone receiver binds `http://127.0.0.1:8787/webtasks/webhook` by default.
 It does not create a public route, tunnel, or hosted endpoint.
 An independently configured public HTTPS route must forward Parallel's callbacks to this receiver.
 
-Set `PIPARA_WEBHOOK_URL` to the public HTTPS URL, including the receiver path.
+Set `WEBTASKS_WEBHOOK_URL` to the public HTTPS URL, including the receiver path.
 Start a new Pi process with the same configuration.
 New research calls then use this callback without a model-supplied URL.
 An explicit `webhook_url` overrides the default. `webhook_url: null` disables the callback for that call.
@@ -64,10 +66,10 @@ The callback saves the completed result and queues a session follow-up. Status p
 Example `.env` configuration, with an independently configured public route:
 
 ```dotenv
-PIPARA_WEBHOOK_URL=https://research.example.com/parallel/webhook
-PIPARA_WEBHOOK_DIR=/absolute/private/path/parallel-webhooks
-PIPARA_WEBHOOK_PORT=8787
-PIPARA_WEBHOOK_PATH=/parallel/webhook
+WEBTASKS_WEBHOOK_URL=https://research.example.com/webtasks/webhook
+WEBTASKS_DIR=/absolute/private/path/webtasks
+WEBTASKS_WEBHOOK_PORT=8787
+WEBTASKS_WEBHOOK_PATH=/webtasks/webhook
 ```
 
 The receiver requires a separate signing secret. It never accepts unsigned deliveries as successful callbacks.
@@ -109,8 +111,8 @@ The consumer watches local inbox changes and performs startup recovery. It does 
 Each result request is bounded and uses no automatic SDK retry.
 A failed fetch remains saved until an explicit retry. Inbox writes must not cause a retry loop.
 
-- `/parallel-webhook status` reports inbox and session ownership counts.
-- `/parallel-webhook recover` retries this session's failed retrievals and processes pending completions.
+- `/webtasks status` reports store and session ownership counts.
+- `/webtasks recover` retries this session's failed retrievals and processes pending completions.
 - A closed session retains its pending work for a later resume.
 - Each Monitor detection has its own notification state, so later events do not replace earlier notifications.
 

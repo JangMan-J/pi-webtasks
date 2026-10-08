@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { account, accountLogout, beginDeviceLogin, dump, formatError, pollDeviceLogin, researchClient } from "./ops.ts";
 import { WebhookInbox } from "./webhook-inbox.ts";
 import { WebhookConsumer, type Delivery } from "./webhook-consumer.ts";
-import { CONVENTIONAL_WEBHOOK_INBOX_DIR, WEBHOOK_DIR_ENV } from "./webhook-receiver.ts";
+import { WEBTASKS_DIR_ENV } from "./webhook-receiver.ts";
 import { ResearchSession, deepSearch, interactiveSearch, webSearch, type CallContext } from "./research.ts";
 import { OutboundCollector } from "./outbound.ts";
 
@@ -24,26 +24,35 @@ function callContext(ctx: ExtensionContext, signal?: AbortSignal, onUpdate?: (u:
   };
 }
 
-/** Explicitly configured shared inbox directory (also used by the standalone receiver). */
+/** Explicitly configured store directory (also used by the standalone receiver). */
 function webhookInboxDir(): string | undefined {
-  const dir = process.env[WEBHOOK_DIR_ENV];
+  const dir = process.env[WEBTASKS_DIR_ENV];
   return dir && dir.trim() ? dir : undefined;
 }
 
-/** The store used for deep research state: the configured directory, else the conventional one. */
+/** The store used for research state: WEBTASKS_DIR when set, else `<agent-dir>/webtasks`. */
 function storeDirectory(): string {
-  return webhookInboxDir() ?? join(getAgentDir(), CONVENTIONAL_WEBHOOK_INBOX_DIR);
+  return webhookInboxDir() ?? join(getAgentDir(), "webtasks");
 }
 
 /** Optional signed per-run callback. Deep research does not depend on it. */
 function configuredCallback(): string | undefined {
-  const raw = process.env.PIPARA_WEBHOOK_URL?.trim();
+  const raw = process.env.WEBTASKS_WEBHOOK_URL?.trim();
   if (!raw) return undefined;
   try {
     const url = new URL(raw);
     return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && !url.hash ? raw : undefined;
   } catch { return undefined; }
 }
+
+const WEBTASKS_USAGE = [
+  "Usage: /webtasks <command>",
+  "  status    show the research store and this session's pending work",
+  "  recover   retry failed retrievals and deliver pending notifications",
+  "  login     sign in to the Parallel account (device flow)",
+  "  logout    revoke the Parallel account tokens",
+  "  balance   show the Parallel prepaid balance",
+].join("\n");
 
 function reply(out: { text: string; details: Record<string, unknown> }) {
   return { content: [{ type: "text" as const, text: out.text }], details: out.details };
@@ -104,7 +113,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
       pi.sendMessage({ customType: "webtasks-research", content: text, display: true, details }, { deliverAs: "followUp", triggerTurn: true });
     } catch (err) {
       // Not acknowledged, so a later pass retries instead of losing it.
-      if (ctx.hasUI) ctx.ui.notify(`Research notification failed: ${formatError(err)}`, "warning");
+      if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: research notification failed: ${formatError(err)}`, "warning");
       return;
     }
     await owner.consumer?.acknowledge(d.webhook_id);
@@ -146,18 +155,18 @@ export default function piWebtasks(pi: ExtensionAPI) {
       getClient: researchClient,
       artifactDir,
       cwd: ctx.cwd,
-      onLog: msg => { if (ctx.hasUI) ctx.ui.notify(msg, "warning"); },
+      onLog: msg => { if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: ${msg}`, "warning"); },
     });
     await inbox.prune().catch(() => {});
     const recover = () => {
       webhookRecoveryPass(ctx).catch(err => {
-        if (ctx.hasUI) ctx.ui.notify(`Research recovery failed: ${formatError(err)}`, "warning");
+        if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: research recovery failed: ${formatError(err)}`, "warning");
       });
     };
     runtime.collector = new OutboundCollector({
       session: runtime.session,
       onRecorded: recover,
-      onLog: msg => { if (ctx.hasUI) ctx.ui.notify(msg, "warning"); },
+      onLog: msg => { if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: ${msg}`, "warning"); },
     });
     // Arm the watcher before the startup pass so a callback between them is not stranded.
     runtime.consumer.start(recover);
@@ -173,31 +182,65 @@ export default function piWebtasks(pi: ExtensionAPI) {
     await stopRuntime();
   });
 
-  pi.registerCommand("parallel-webhook", {
-    description: "Parallel webhook: show pending/registered state, or force a recovery pass",
+  pi.registerCommand("webtasks", {
+    description: "pi-webtasks: status, recover, login, logout, balance",
     handler: async (args, ctx) => {
-      const dir = storeDirectory();
-      const sub = args.trim();
-      if (sub === "recover" || sub === "") {
-        // Explicit command only: retries entries whose one-shot fetch
-        // previously failed. The watcher and startup pass never do this
-        // (see webhookConsumer.start() above and src/webhook-consumer.ts).
-        const { processed, delivered } = await webhookRecoveryPass(ctx, true);
-        ctx.ui.notify(`Webhook recovery: ${processed} entr${processed === 1 ? "y" : "ies"} resolved, ${delivered} notification${delivered === 1 ? "" : "s"} delivered.`, "info");
-        return;
-      }
-      if (sub === "status") {
-        const inbox = rt?.inbox ?? new WebhookInbox(dir);
-        try {
-          const [pending, registrations] = await Promise.all([inbox.listPending(), inbox.listRegistrations()]);
-          const owned = registrations.filter(r => r.session_id === ctx.sessionManager.getSessionId());
-          ctx.ui.notify(`Webhook inbox ${dir}: ${pending.length} pending, ${registrations.length} registrations total (${owned.length} owned by this session).`, "info");
-        } finally {
-          if (inbox !== rt?.inbox) await inbox.close();
+      const [sub = ""] = args.trim().split(/\s+/);
+      switch (sub) {
+        case "status": {
+          const dir = storeDirectory();
+          const inbox = rt?.inbox ?? new WebhookInbox(dir);
+          try {
+            const [pending, registrations] = await Promise.all([inbox.listPending(), inbox.listRegistrations()]);
+            const owned = registrations.filter(r => r.session_id === ctx.sessionManager.getSessionId());
+            ctx.ui.notify(`pi-webtasks store ${dir}: ${pending.length} pending, ${registrations.length} registrations (${owned.length} owned by this session).`, "info");
+          } finally {
+            if (inbox !== rt?.inbox) await inbox.close();
+          }
+          return;
         }
-        return;
+        case "recover": {
+          // Explicit only: retries entries whose one-shot fetch failed. The watcher and the startup pass never do this.
+          const { processed, delivered } = await webhookRecoveryPass(ctx, true);
+          ctx.ui.notify(`pi-webtasks recover: ${processed} entr${processed === 1 ? "y" : "ies"} resolved, ${delivered} notification${delivered === 1 ? "" : "s"} delivered.`, "info");
+          return;
+        }
+        case "login": {
+          const info = await beginDeviceLogin();
+          const url = info.verification_uri_complete || info.verification_uri;
+          ctx.ui.notify(`pi-webtasks login: open ${url} and enter code ${info.user_code}`, "info");
+          execFile("xdg-open", [url], () => {});
+          ctx.ui.setStatus("pi-webtasks", "Waiting for Parallel account approval…");
+          try {
+            const done = await pollDeviceLogin(info, {
+              signal: ctx.signal,
+              onProgress: (msg) => ctx.ui.setStatus("pi-webtasks", msg),
+            });
+            ctx.ui.notify(`pi-webtasks: signed in to the Parallel account${done.org_id ? ` (org ${done.org_id})` : ""}`, "info");
+          } finally {
+            ctx.ui.setStatus("pi-webtasks", undefined);
+          }
+          return;
+        }
+        case "logout": {
+          const ok = await ctx.ui.confirm("Log out of the Parallel account?", "Revokes the Parallel account tokens that pi-webtasks uses.");
+          if (!ok) return;
+          await accountLogout();
+          ctx.ui.notify("pi-webtasks: Parallel account tokens cleared", "info");
+          return;
+        }
+        case "balance": {
+          try {
+            const data = await account({ action: "balance" });
+            ctx.ui.notify(dump(data, 2000), "info");
+          } catch (err) {
+            ctx.ui.notify(formatError(err), "error");
+          }
+          return;
+        }
+        default:
+          ctx.ui.notify(`${sub ? `Unknown command "${sub}".\n` : ""}${WEBTASKS_USAGE}`, "info");
       }
-      ctx.ui.notify("Usage: /parallel-webhook [recover|status]", "info");
     },
   });
 
@@ -260,48 +303,6 @@ export default function piWebtasks(pi: ExtensionAPI) {
     }, { additionalProperties: false }),
     async execute(_id, params, signal, onUpdate, ctx) {
       return reply(await deepSearch(callContext(ctx, signal, onUpdate), currentResearch(), params));
-    },
-  });
-
-  pi.registerCommand("parallel-login", {
-    description: "Parallel Account API device login (OAuth)",
-    handler: async (_args, ctx) => {
-      const info = await beginDeviceLogin();
-      const url = info.verification_uri_complete || info.verification_uri;
-      ctx.ui.notify(`Parallel login: ${url}  code ${info.user_code}`, "info");
-      execFile("xdg-open", [url], () => {});
-      ctx.ui.setStatus("pi-webtasks", "Waiting for Parallel login…");
-      try {
-        const done = await pollDeviceLogin(info, {
-          signal: ctx.signal,
-          onProgress: (msg) => ctx.ui.setStatus("pi-webtasks", msg),
-        });
-        ctx.ui.notify(`Parallel account login ok${done.org_id ? ` org ${done.org_id}` : ""}`, "info");
-      } finally {
-        ctx.ui.setStatus("pi-webtasks", undefined);
-      }
-    },
-  });
-
-  pi.registerCommand("parallel-logout", {
-    description: "Revoke Parallel Account API tokens",
-    handler: async (_args, ctx) => {
-      const ok = await ctx.ui.confirm("Log out of Parallel account?", "Revokes the refresh token.");
-      if (!ok) return;
-      await accountLogout();
-      ctx.ui.notify("Parallel account tokens cleared", "info");
-    },
-  });
-
-  pi.registerCommand("parallel-balance", {
-    description: "Show Parallel prepaid balance",
-    handler: async (_args, ctx) => {
-      try {
-        const data = await account({ action: "balance" });
-        ctx.ui.notify(dump(data, 2000), "info");
-      } catch (err) {
-        ctx.ui.notify(formatError(err), "error");
-      }
     },
   });
 }

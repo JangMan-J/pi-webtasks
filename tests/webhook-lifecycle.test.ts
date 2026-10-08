@@ -61,14 +61,14 @@ test("registered deep_search -> signed callback -> saved evidence -> one owning-
     throw new Error(`Unexpected outbound path: ${path}`);
   });
   const dir = join(h.dir, "webhooks");
-  process.env.PIPARA_WEBHOOK_DIR = dir;
+  process.env.WEBTASKS_DIR = dir;
   const inbox = new WebhookInbox(dir);
   const worker = new WebhookWorker({
     inbox, artifactDir: h.artifacts, cwd: h.dir,
     getClient: async () => new Parallel({ apiKey: "offline-only", maxRetries: 0 }),
   });
   const receiver = await startWebhookReceiver({ inbox, secret: SECRET, port: 0, onAccepted: () => worker.kick() });
-  process.env.PIPARA_WEBHOOK_URL = receiver.url;
+  process.env.WEBTASKS_WEBHOOK_URL = receiver.url;
   const owner = await h.instance("s-e2e-owner");
   try {
     await worker.start();
@@ -123,14 +123,14 @@ test("stopped owner: receiver saves evidence, foreign session stays silent, resu
     throw new Error(`Unexpected outbound path: ${path}`);
   });
   const dir = join(h.dir, "webhooks");
-  process.env.PIPARA_WEBHOOK_DIR = dir;
+  process.env.WEBTASKS_DIR = dir;
   const inbox = new WebhookInbox(dir);
   const worker = new WebhookWorker({
     inbox, artifactDir: join(h.dir, "wrong-fallback"), cwd: h.dir,
     getClient: async () => new Parallel({ apiKey: "offline-only", maxRetries: 0 }),
   });
   const receiver = await startWebhookReceiver({ inbox, secret: SECRET, port: 0, onAccepted: () => worker.kick() });
-  process.env.PIPARA_WEBHOOK_URL = receiver.url;
+  process.env.WEBTASKS_WEBHOOK_URL = receiver.url;
   const owner = await h.instance("s-offline-owner");
   const stranger = await h.instance("s-not-the-owner");
   let resumed: any;
@@ -197,14 +197,14 @@ test("signed matching metadata completes before addRuns returns without losing t
     throw new Error(`Unexpected outbound path: ${path}`);
   });
   const dir = join(h.dir, "webhooks");
-  process.env.PIPARA_WEBHOOK_DIR = dir;
+  process.env.WEBTASKS_DIR = dir;
   inbox = new WebhookInbox(dir);
   const worker = new WebhookWorker({
     inbox, artifactDir: h.artifacts, cwd: h.dir,
     getClient: async () => new Parallel({ apiKey: "offline-only", maxRetries: 0 }),
   });
   const receiver = await startWebhookReceiver({ inbox, secret: SECRET, port: 0, onAccepted: () => worker.kick() });
-  receiverUrl = process.env.PIPARA_WEBHOOK_URL = receiver.url;
+  receiverUrl = process.env.WEBTASKS_WEBHOOK_URL = receiver.url;
   const owner = await h.instance("s-early-owner");
   try {
     await worker.start();

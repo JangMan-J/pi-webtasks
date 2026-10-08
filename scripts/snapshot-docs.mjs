@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 
 const origin = 'https://docs.parallel.ai';
 const started = new Date().toISOString();
-const directory = resolve(process.argv[2] ?? join(homedir(), '.cache', 'pi-parallelized', 'parallel-docs', started.replaceAll(':', '-')));
+const directory = resolve(process.argv[2] ?? join(homedir(), '.cache', 'pi-webtasks', 'parallel-docs', started.replaceAll(':', '-')));
 const manifest = { origin, started, finished: null, directory, concurrency: 4, resources: [] };
 const queue = [];
 const seen = new Set();
@@ -63,7 +63,7 @@ async function request(url) {
   for (let redirects = 0; redirects <= 8; redirects++) {
     const response = await fetch(url, {
       signal,
-      headers: { 'User-Agent': 'pi-parallelized-docs-snapshot', Accept: 'text/markdown, text/plain, application/json, application/xml' },
+      headers: { 'User-Agent': 'pi-webtasks-docs-snapshot', Accept: 'text/markdown, text/plain, application/json, application/xml' },
       redirect: 'manual',
     });
     if (![301, 302, 303, 307, 308].includes(response.status)) return { response, final_url: url };

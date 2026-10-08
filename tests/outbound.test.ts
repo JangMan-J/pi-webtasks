@@ -485,8 +485,8 @@ test("no callback configured: submit -> stream completion -> saved artifact -> o
   assert.match(read.text, /Finding from the stream/);
 
   const notes: string[] = [];
-  await h.commands.get("parallel-webhook").handler("status", { ...h.ctx, ui: { notify: (m: string) => notes.push(m) } });
-  assert.match(notes.join("\n"), /1 registrations total \(1 owned by this session\)/, "the command reports the default store, not inactive");
+  await h.commands.get("webtasks").handler("status", { ...h.ctx, ui: { notify: (m: string) => notes.push(m) } });
+  assert.match(notes.join("\n"), /pi-webtasks store .*1 registrations \(1 owned by this session\)/, "the status command reports the default store");
 });
 
 test("closed while running: the completion that arrives during the closed period is delivered on the next start", async t => {

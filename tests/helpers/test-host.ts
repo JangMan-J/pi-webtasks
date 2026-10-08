@@ -127,12 +127,12 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   });
   process.env.HOME = dir;
   process.env.PI_CODING_AGENT_DIR = resolve(dir, "agent");
-  process.env.PIPARA_API_KEY = "offline-only";
+  process.env._PARALLEL_API_KEY = "offline-only";
   // Never inherit an installed receiver's live inbox or callback defaults. Explicit empty
   // values also block an adjacent parallel.env from enabling them.
-  process.env.PIPARA_WEBHOOK_DIR = options.webhookDir ?? "";
-  process.env.PIPARA_WEBHOOK_URL = options.webhookUrl ?? "";
-  process.env.PIPARA_OUTPUT_FORMAT = "json";
+  process.env.WEBTASKS_DIR = options.webhookDir ?? "";
+  process.env.WEBTASKS_WEBHOOK_URL = options.webhookUrl ?? "";
+  process.env.WEBTASKS_OUTPUT_FORMAT = "json";
   const calls: Call[] = [];
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -172,6 +172,6 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   return {
     dir, calls, instance, ...first,
     artifacts: resolve(dir, "agent/webtasks/results"),
-    inboxDir: options.webhookDir ?? resolve(dir, "agent/parallelized/webhooks"),
+    inboxDir: options.webhookDir ?? resolve(dir, "agent/webtasks"),
   };
 }

@@ -24,7 +24,7 @@ export const EXTRACT_DEFAULTS = { max_chars_total: 100_000, max_chars_per_result
 const PLATFORM = process.env.PARALLEL_PLATFORM_URL?.replace(/\/$/, "") || "https://platform.parallel.ai";
 const SERVICE = process.env.PARALLEL_SERVICE_API_URL?.replace(/\/$/, "") || "https://api.parallel.ai/account";
 const ACCOUNT_SCOPE = "keys:read keys:create keys:delete apps:read apps:create apps:delete balance:read balance:add";
-const ACCOUNT_PATH = resolve(homedir(), ".config/pi-parallelized/account.json");
+const ACCOUNT_PATH = resolve(homedir(), ".config/pi-webtasks/account.json");
 
 export type CallOpts = {
   signal?: AbortSignal;
@@ -65,11 +65,10 @@ export function formatError(err: unknown): string {
 
 export async function loadResearchApiKey(): Promise<string> {
   if (cachedKey) return cachedKey;
-  // env.ts maps deployed and legacy names onto PIPARA_API_KEY at load.
-  // so a key exported after import still works.
-  const key = (process.env.PIPARA_API_KEY ?? process.env._PARALLEL_API_KEY ?? process.env.PARALLEL_API_KEY)?.trim();
+  // Read at call time, so a key exported after import still works. The provider's own name is preferred.
+  const key = (process.env._PARALLEL_API_KEY ?? process.env.PARALLEL_API_KEY)?.trim();
   if (!key) {
-    throw new Error("Parallel API key missing. Set _PARALLEL_API_KEY in the environment. Legacy PARALLEL_API_KEY and explicit PIPARA_API_KEY remain supported.");
+    throw new Error("Parallel API key missing. Set _PARALLEL_API_KEY in the environment (PARALLEL_API_KEY is also accepted).");
   }
   cachedKey = key;
   return cachedKey;
@@ -842,7 +841,7 @@ export async function registerAccountClient(): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      client_name: "pi-parallelized",
+      client_name: "pi-webtasks",
       platform: {
         machine: arch(),
         os_name: platform() === "win32" ? "nt" : "posix",
@@ -923,15 +922,15 @@ export async function pollDeviceLogin(info: DeviceLogin, opts?: CallOpts): Promi
         continue;
       }
       if (msg.includes("access_denied")) throw new Error("login denied");
-      if (msg.includes("expired_token")) throw new Error("device code expired; run /parallel-login again");
+      if (msg.includes("expired_token")) throw new Error("device code expired; run /webtasks login again");
       throw err;
     }
   }
-  throw new Error("device code expired; run /parallel-login again");
+  throw new Error("device code expired; run /webtasks login again");
 }
 
 async function refreshTokens(stored: AccountFile): Promise<AccountFile> {
-  if (!stored.refresh_token || !stored.client_id) throw new Error("no Parallel account session; run /parallel-login");
+  if (!stored.refresh_token || !stored.client_id) throw new Error("no Parallel account session; run /webtasks login");
   const json = await postForm(`${PLATFORM}/getServiceKeys/token`, {
     grant_type: "refresh_token",
     refresh_token: stored.refresh_token,
@@ -944,12 +943,12 @@ async function refreshTokens(stored: AccountFile): Promise<AccountFile> {
 export async function getAccessToken(): Promise<string> {
   let stored = await readAccount();
   const now = Math.floor(Date.now() / 1000);
-  if (!stored.access_token && !stored.refresh_token) throw new Error("no Parallel account session; run /parallel-login");
-  if (stored.refresh_expires_at && stored.refresh_expires_at < now) throw new Error("account refresh token expired; run /parallel-login");
+  if (!stored.access_token && !stored.refresh_token) throw new Error("no Parallel account session; run /webtasks login");
+  if (stored.refresh_expires_at && stored.refresh_expires_at < now) throw new Error("account refresh token expired; run /webtasks login");
   if (!stored.access_token || (stored.access_expires_at && stored.access_expires_at < now + 60)) {
     stored = await refreshTokens(stored);
   }
-  if (!stored.access_token) throw new Error("no Parallel account session; run /parallel-login");
+  if (!stored.access_token) throw new Error("no Parallel account session; run /webtasks login");
   return stored.access_token;
 }
 

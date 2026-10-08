@@ -400,7 +400,7 @@ export class WebhookInbox {
   }
 
   private dbPath(): string {
-    return join(this.baseDir, "webhooks.sqlite");
+    return join(this.baseDir, "webtasks.sqlite");
   }
 
   async init(): Promise<void> {
@@ -511,8 +511,6 @@ export class WebhookInbox {
     const researchCols = (db.prepare("PRAGMA table_info(research)").all() as { name: string }[]).map(c => c.name);
     if (!researchCols.includes("interaction_id")) db.exec("ALTER TABLE research ADD COLUMN interaction_id TEXT");
     if (!researchCols.includes("parent")) db.exec("ALTER TABLE research ADD COLUMN parent TEXT");
-    // Removes the per-session table from earlier builds. Nothing reads or writes it; opening a store drops it.
-    db.exec("DROP TABLE IF EXISTS pi_sessions");
     db.exec(`
       CREATE TABLE IF NOT EXISTS search_activity (
         reference TEXT PRIMARY KEY,

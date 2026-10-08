@@ -396,7 +396,7 @@ test("saveConversation is an immutable insert", async t => {
 
 test("migration keeps legacy events and registrations and adds owner artifact columns", async t => {
   const dir = await tmp(t);
-  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const db = new DatabaseSync(join(dir, "webtasks.sqlite"));
   db.exec(`CREATE TABLE events (
     webhook_id TEXT PRIMARY KEY, received_at INTEGER NOT NULL, event_json TEXT NOT NULL,
     resource_id TEXT, kind TEXT, event_type TEXT, handled INTEGER NOT NULL DEFAULT 0,
@@ -422,13 +422,13 @@ test("migration keeps legacy events and registrations and adds owner artifact co
   assert.equal(reg?.session_id, "s-old");
   assert.equal(reg?.artifact_dir, undefined);
   await inbox.markNotified("wh-legacy");
-  const aged = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const aged = new DatabaseSync(join(dir, "webtasks.sqlite"));
   aged.prepare("UPDATE events SET handled_at = ? WHERE webhook_id = ?").run(Date.now() - DONE_RETENTION_MS - 1_000, "wh-legacy");
   aged.close();
   assert.equal(await inbox.prune(), 1, "acknowledged legacy events past retention can still be pruned");
   await inbox.put({ webhook_id: "wh-keep", event: { type: "task_run.status" }, resource_id: "trun_keep", kind: "task" });
   await inbox.markHandled("wh-keep", {});
-  const keep = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const keep = new DatabaseSync(join(dir, "webtasks.sqlite"));
   keep.prepare("UPDATE events SET handled_at = ? WHERE webhook_id = ?").run(Date.now() - DONE_RETENTION_MS - 5_000, "wh-keep");
   keep.close();
   assert.equal(await inbox.prune(), 0);
@@ -437,7 +437,7 @@ test("migration keeps legacy events and registrations and adds owner artifact co
 
 test("current research rows gain interaction and parent columns without losing legacy events", async t => {
   const dir = await tmp(t);
-  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  const db = new DatabaseSync(join(dir, "webtasks.sqlite"));
   db.exec(`CREATE TABLE events (
     webhook_id TEXT PRIMARY KEY, received_at INTEGER NOT NULL, event_json TEXT NOT NULL,
     resource_id TEXT, kind TEXT, event_type TEXT, handled INTEGER NOT NULL DEFAULT 0,
@@ -465,35 +465,6 @@ test("current research rows gain interaction and parent columns without losing l
   await inbox.updateResearch("research_old", { interaction_id: "int_learned" });
   assert.equal((await inbox.getResearch("research_old"))?.interaction_id, "int_learned");
   assert.equal((await inbox.getResearch("research_old"))?.run_id, "trun_old");
-});
-
-test("opening a store drops the legacy pi_sessions table and keeps research, session groups and events", async t => {
-  const dir = await tmp(t);
-  const seeded = new WebhookInbox(dir);
-  await seeded.beginSessionGroup("s-old");
-  await seeded.completeSessionGroup("s-old", "tg_old");
-  await seeded.createResearch({ reference: "research_old", session_id: "s-old", group_id: "tg_old", query: "q", effort: "low", status: "pending", artifact_dir: dir, created_at: 1, updated_at: 1 });
-  await seeded.put({ webhook_id: "wh-old", event: { type: "task_run.status" }, resource_id: "trun_old", kind: "task" });
-  await seeded.close();
-
-  const legacy = new DatabaseSync(join(dir, "webhooks.sqlite"));
-  legacy.exec("CREATE TABLE pi_sessions (session_id TEXT PRIMARY KEY, cwd TEXT NOT NULL, artifact_dir TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
-  legacy.prepare("INSERT INTO pi_sessions (session_id, cwd, artifact_dir, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("s-legacy", "/work", "/results", 10, 10);
-  legacy.close();
-
-  const reopened = new WebhookInbox(dir);
-  t.after(() => reopened.close());
-  assert.deepEqual((await reopened.getSessionGroup("s-old"))?.group_id, "tg_old");
-  assert.equal((await reopened.getResearch("research_old"))?.status, "pending");
-  assert.equal((await reopened.listAll()).length, 1);
-  assert.equal(await reopened.getSessionGroup("s-legacy"), undefined, "the legacy row implies no group");
-
-  const check = new DatabaseSync(join(dir, "webhooks.sqlite"));
-  try {
-    assert.deepEqual(check.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pi_sessions'").all(), []);
-  } finally {
-    check.close();
-  }
 });
 
 test("search activity is an immutable meta row and rejects payloads or unknown ids", async t => {

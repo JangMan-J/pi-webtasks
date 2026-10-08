@@ -1,30 +1,15 @@
 #!/usr/bin/env node
-// Dump every registered tool as the model sees it: provider function schema,
-// prompt snippet/guidelines, and the rendered system-prompt sections.
-// Loads the extension through Pi's real loader. No API key or network.
+// Dump every registered pi-webtasks tool as the model sees it: provider function schema, prompt
+// snippet/guidelines, and the rendered system-prompt sections. Loads the extension through Pi's real
+// loader. No API key or network.
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadTools } from "../tests/helpers/test-host.ts";
 
 const out = resolve(process.argv[2] ?? "tool-schemas");
-// Inspect both real registration modes; an all-active host has no activator.
-const previous = process.env.PIPARA_LAZY_TOOLS;
-let full: Awaited<ReturnType<typeof loadTools>>;
-let deferredHost: Awaited<ReturnType<typeof loadTools>>;
-try {
-  process.env.PIPARA_LAZY_TOOLS = "0";
-  full = await loadTools();
-  process.env.PIPARA_LAZY_TOOLS = "1";
-  deferredHost = await loadTools();
-} finally {
-  if (previous === undefined) delete process.env.PIPARA_LAZY_TOOLS;
-  else process.env.PIPARA_LAZY_TOOLS = previous;
-}
-const { commands, buildSystemPromptSections } = full;
-const definitions = [...deferredHost.tools.values()] as any[];
-// The registered selector is the source of truth for deferred tool names.
-const selector = deferredHost.tools.get("parallel_tools").parameters.properties.tools.items;
-const deferred: string[] = selector.enum;
+const host = await loadTools();
+const { commands, buildSystemPromptSections } = host;
+const definitions = [...host.tools.values()] as any[];
 
 const entries = definitions.map(d => {
   const provider = { type: "function", function: { name: d.name, description: d.description, parameters: d.parameters } };
@@ -36,27 +21,18 @@ const entries = definitions.map(d => {
     promptGuidelines: d.promptGuidelines ?? [],
     parameters: JSON.parse(JSON.stringify(d.parameters)),
     providerSchemaChars: JSON.stringify(provider).length,
-    deferredWhenLazy: deferred.includes(d.name),
   };
 });
-const options = (selected: string[]) => ({
+const prompt = buildSystemPromptSections({
   cwd: "/workspace",
-  selectedTools: selected,
+  selectedTools: [...host.tools.keys()],
   toolSnippets: Object.fromEntries(definitions.map(t => [t.name, t.promptSnippet])),
   toolGuidelines: Object.fromEntries(definitions.map(t => [t.name, t.promptGuidelines])),
 });
-const all = [...full.tools.keys()] as string[];
-const lazy = entries.map(e => e.name).filter(n => !deferred.includes(n));
-const prompt = { allActive: buildSystemPromptSections(options(all)), lazy: buildSystemPromptSections(options(lazy)) };
-const sum = (names: string[]) => entries.filter(e => names.includes(e.name)).reduce((t, e) => t + e.providerSchemaChars, 0);
 const totals = {
   tools: entries.length,
-  activeTools: { allActive: all, lazy },
-  providerSchemaChars: { allActive: sum(all), lazy: sum(lazy) },
-  promptSectionChars: {
-    allActive: { tools: prompt.allActive.tools?.length ?? 0, rules: prompt.allActive.rules?.length ?? 0 },
-    lazy: { tools: prompt.lazy.tools?.length ?? 0, rules: prompt.lazy.rules?.length ?? 0 },
-  },
+  providerSchemaChars: entries.reduce((total, e) => total + e.providerSchemaChars, 0),
+  promptSectionChars: { tools: prompt.tools?.length ?? 0, rules: prompt.rules?.length ?? 0 },
 };
 
 await mkdir(out, { recursive: true });
@@ -70,25 +46,25 @@ await writeFile(resolve(out, "tool-schemas.json"), JSON.stringify({
 }, null, 2) + "\n");
 
 const md = [
-  "# pi-parallelized tool schemas",
+  "# pi-webtasks tool schemas",
   "",
   `Generated ${new Date().toISOString()} from \`src/index.ts\` through Pi's extension loader.`,
   "Provider chars = `JSON.stringify({type:\"function\",function:{name,description,parameters}})`, the per-request payload measure used in `bench/ab-overhead.ts`.",
   "",
-  "| Tool | Provider chars | Deferred when lazy |",
-  "| --- | ---: | --- |",
-  ...entries.map(e => `| \`${e.name}\` | ${e.providerSchemaChars} | ${e.deferredWhenLazy ? "yes" : "no"} |`),
-  `| Total (all active / lazy) | ${totals.providerSchemaChars.allActive} / ${totals.providerSchemaChars.lazy} | |`,
+  "| Tool | Provider chars |",
+  "| --- | ---: |",
+  ...entries.map(e => `| \`${e.name}\` | ${e.providerSchemaChars} |`),
+  `| Total | ${totals.providerSchemaChars} |`,
   "",
-  "## System prompt sections contributed (all tools active)",
+  "## System prompt sections contributed",
   "",
   "### Tools",
   "",
-  "```text", prompt.allActive.tools ?? "", "```",
+  "```text", prompt.tools ?? "", "```",
   "",
   "### Rules",
   "",
-  "```text", prompt.allActive.rules ?? "", "```",
+  "```text", prompt.rules ?? "", "```",
   "",
   ...entries.flatMap(e => [
     `## \`${e.name}\``,

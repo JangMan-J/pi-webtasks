@@ -3,23 +3,22 @@ import test from "node:test";
 import { createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebhookInbox } from "../src/webhook-inbox.ts";
 import {
-  CONVENTIONAL_WEBHOOK_INBOX_DIR,
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_WEBHOOK_HOST,
   DEFAULT_WEBHOOK_PATH,
   DEFAULT_WEBHOOK_PORT,
   DEFAULT_WEBHOOK_SCHEME,
-  WEBHOOK_DIR_ENV,
+  WEBTASKS_DIR_ENV,
   WEBHOOK_PORT_ENV,
   WEBHOOK_PATH_ENV,
   WEBHOOK_SCHEME_ENV,
   WEBHOOK_SECRET_ENV,
-  legacyResultDir,
+  defaultResultsDir,
   startWebhookReceiver,
 } from "../src/webhook-receiver.ts";
 
@@ -93,24 +92,22 @@ function assertNoLeak(text: string, body = "") {
   if (body.length > 0) assert.equal(text.includes(body), false);
 }
 
-test("legacy artifact root follows the agent results directory and otherwise stays beside the inbox", () => {
-  assert.equal(legacyResultDir("/tmp/agent/parallelized/webhooks", {}), "/tmp/agent/parallelized/results");
-  assert.equal(legacyResultDir("/tmp/custom-inbox", { PI_CODING_AGENT_DIR: "/tmp/agent" }), "/tmp/agent/parallelized/results");
-  assert.equal(legacyResultDir("/tmp/custom-inbox", {}), "/tmp/custom-inbox/results");
+test("the standalone receiver's fallback results live under the agent's webtasks directory", () => {
+  assert.equal(defaultResultsDir({ PI_CODING_AGENT_DIR: "/tmp/agent" }), "/tmp/agent/webtasks/results");
+  assert.equal(defaultResultsDir({ HOME: "/tmp/home" }), join(homedir(), ".pi", "agent", "webtasks", "results"));
 });
 
 test("public configuration matches the agreed local receiver contract", () => {
   assert.equal(DEFAULT_WEBHOOK_HOST, "127.0.0.1");
   assert.equal(DEFAULT_WEBHOOK_PORT, 8787);
-  assert.equal(DEFAULT_WEBHOOK_PATH, "/parallel/webhook");
+  assert.equal(DEFAULT_WEBHOOK_PATH, "/webtasks/webhook");
   assert.equal(DEFAULT_WEBHOOK_SCHEME, "standard");
   assert.equal(DEFAULT_MAX_BODY_BYTES, 1_048_576);
-  assert.equal(CONVENTIONAL_WEBHOOK_INBOX_DIR, "parallelized/webhooks");
-  assert.equal(WEBHOOK_SECRET_ENV, "PIPARA_WEBHOOK_SECRET");
-  assert.equal(WEBHOOK_SCHEME_ENV, "PIPARA_WEBHOOK_SCHEME");
-  assert.equal(WEBHOOK_PORT_ENV, "PIPARA_WEBHOOK_PORT");
-  assert.equal(WEBHOOK_PATH_ENV, "PIPARA_WEBHOOK_PATH");
-  assert.equal(WEBHOOK_DIR_ENV, "PIPARA_WEBHOOK_DIR");
+  assert.equal(WEBHOOK_SECRET_ENV, "PARALLEL_WEBHOOK_KEY");
+  assert.equal(WEBHOOK_SCHEME_ENV, "WEBTASKS_WEBHOOK_SCHEME");
+  assert.equal(WEBHOOK_PORT_ENV, "WEBTASKS_WEBHOOK_PORT");
+  assert.equal(WEBHOOK_PATH_ENV, "WEBTASKS_WEBHOOK_PATH");
+  assert.equal(WEBTASKS_DIR_ENV, "WEBTASKS_DIR");
 });
 
 test("rejects missing, empty, and invalid config before listening", async t => {
@@ -121,13 +118,13 @@ test("rejects missing, empty, and invalid config before listening", async t => {
   await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, scheme: "other" as "standard" }), /scheme/);
   await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, port: 70000 }), /port/);
   await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, host: "" }), /host/);
-  await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, path: "parallel/webhook" }), /path/);
+  await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, path: "webtasks/webhook" }), /path/);
   await assert.rejects(() => startWebhookReceiver({ inbox, secret: SECRET, maxBodyBytes: 0 }), /maxBodyBytes/);
 });
 
 test("accepts a valid standard-scheme delivery and persists webhook_id + event only", async t => {
   const { inbox, receiver } = await start(t);
-  assert.match(receiver.url, /^http:\/\/127\.0\.0\.1:\d+\/parallel\/webhook$/);
+  assert.match(receiver.url, /^http:\/\/127\.0\.0\.1:\d+\/webtasks\/webhook$/);
   const id = "whevent_standard";
   const res = await post(receiver.url, EVENT, signedHeaders(SECRET, id, EVENT));
   assert.equal(res.status, 200);
@@ -277,7 +274,7 @@ test("durable put failure does not ACK", async t => {
 test("standalone CLI requires config, validates path, and serves a non-default path until SIGTERM", async t => {
   const missing = await new Promise<{ code: number | null; stderr: string }>(resolvePromise => {
     const child = spawn(process.execPath, [RECEIVER_FILE], {
-      env: { ...process.env, [WEBHOOK_SECRET_ENV]: "", [WEBHOOK_DIR_ENV]: "" },
+      env: { ...process.env, [WEBHOOK_SECRET_ENV]: "", [WEBTASKS_DIR_ENV]: "" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderr = "";
@@ -286,7 +283,7 @@ test("standalone CLI requires config, validates path, and serves a non-default p
     child.on("close", code => resolvePromise({ code, stderr }));
   });
   assert.notEqual(missing.code, 0);
-  assert.match(missing.stderr, /PIPARA_WEBHOOK_SECRET|PIPARA_WEBHOOK_DIR/);
+  assert.match(missing.stderr, /PARALLEL_WEBHOOK_KEY|WEBTASKS_DIR/);
   assert.equal(missing.stderr.includes(SECRET), false);
 
   const invalidDir = await tmpDir(t);
@@ -295,9 +292,9 @@ test("standalone CLI requires config, validates path, and serves a non-default p
       env: {
         ...process.env,
         [WEBHOOK_SECRET_ENV]: SECRET,
-        [WEBHOOK_DIR_ENV]: invalidDir,
+        [WEBTASKS_DIR_ENV]: invalidDir,
         [WEBHOOK_PORT_ENV]: "0",
-        [WEBHOOK_PATH_ENV]: "parallel-webhook",
+        [WEBHOOK_PATH_ENV]: "webtasks-test-path",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -315,9 +312,9 @@ test("standalone CLI requires config, validates path, and serves a non-default p
     env: {
       ...process.env,
       [WEBHOOK_SECRET_ENV]: SECRET,
-      [WEBHOOK_DIR_ENV]: dir,
+      [WEBTASKS_DIR_ENV]: dir,
       [WEBHOOK_PORT_ENV]: "0",
-      [WEBHOOK_PATH_ENV]: "/parallel-webhook",
+      [WEBHOOK_PATH_ENV]: "/webtasks/webhook",
       [WEBHOOK_SCHEME_ENV]: "standard",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -347,7 +344,7 @@ test("standalone CLI requires config, validates path, and serves a non-default p
       }
     });
   });
-  assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/parallel-webhook$/);
+  assert.match(url, /^http:\/\/127\.0\.0\.1:\d+\/webtasks\/webhook$/);
   const res = await post(url, EVENT, signedHeaders(SECRET, "whevent_cli", EVENT));
   assert.equal(res.status, 200);
   const inbox = new WebhookInbox(dir);

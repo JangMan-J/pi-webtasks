@@ -157,8 +157,8 @@ The internal collector's snapshot polling is separate and bounded by backoff.
 | FindAll events | None for new work | Outbound or webhook completion replaces transport, not enumeration semantics. |
 | Monitor create/update/trigger/cancel/list/events | None | Explicitly excluded from the three-tool interface. Preserve accepted legacy registrations. |
 | Remote Memory retrieve/evict/clear | None | Local references do not reproduce remote memory administration. No deletion control. |
-| Account management | Existing human login/logout/balance commands | No account model tool or new administration commands. |
-| Legacy callback recovery | Existing `/parallel-webhook` command | Human recovery remains available for accepted work. |
+| Account management | `/webtasks login`, `/webtasks logout`, and `/webtasks balance` | No account model tool or new administration commands. |
+| Legacy callback recovery | `/webtasks recover` command | Human recovery remains available for accepted work. |
 
 ### Entity coverage is deliberately narrow
 
@@ -269,7 +269,7 @@ session switch/reload
 Only sessions that submit deep research get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
-SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research. Opening a store drops the `pi_sessions` table from earlier builds; research, group, and event rows are kept.
+SQLite is the store (`webtasks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research.
 Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
 Session stop aborts and settles the collector. It does not close the remote group or drain research.
 
@@ -298,7 +298,7 @@ The documented maximum stream duration is one hour, and the SDK stream does not 
 Retrieval and session notification remain separate.
 No new listener, daemon, or installed-package change is part of this checkout.
 
-An optional signed webhook (`PIPARA_WEBHOOK_URL`, shared `PIPARA_WEBHOOK_DIR`, running receiver) adds a per-run callback.
+An optional signed webhook (`WEBTASKS_WEBHOOK_URL`, shared `WEBTASKS_DIR`, running receiver) adds a per-run callback.
 The callback contains a Task Run status object, not the answer and citations.
 A run seen through both paths is notified once per reported status, persistently across batches. Two processes can still fetch the same result concurrently; that fetch is idempotent and no paid request repeats.
 

@@ -3,7 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { isUtf8 } from "node:buffer";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { basename, dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { WebhookInbox } from "./webhook-inbox.ts";
 import { WebhookWorker } from "./webhook-worker.ts";
 import { verifyWebhook, verifyWebhookLegacy } from "./webhook.ts";
@@ -11,22 +12,17 @@ import { verifyWebhook, verifyWebhookLegacy } from "./webhook.ts";
 /** Loopback only by default; tests pass `port: 0`. */
 export const DEFAULT_WEBHOOK_HOST = "127.0.0.1";
 export const DEFAULT_WEBHOOK_PORT = 8787;
-export const DEFAULT_WEBHOOK_PATH = "/parallel/webhook";
+export const DEFAULT_WEBHOOK_PATH = "/webtasks/webhook";
 export const DEFAULT_WEBHOOK_SCHEME = "standard";
 /** Bounded in-memory cap for a single delivery body. */
 export const DEFAULT_MAX_BODY_BYTES = 1_048_576;
-/**
- * Conventional location under the Pi agent dir (`<agent-dir>/parallelized/webhooks`).
- * Standalone CLI requires `PIPARA_WEBHOOK_DIR` so this helper does not import Pi.
- * Share the same directory with the consumer.
- */
-export const CONVENTIONAL_WEBHOOK_INBOX_DIR = "parallelized/webhooks";
-
-export const WEBHOOK_SECRET_ENV = "PIPARA_WEBHOOK_SECRET";
-export const WEBHOOK_SCHEME_ENV = "PIPARA_WEBHOOK_SCHEME";
-export const WEBHOOK_PORT_ENV = "PIPARA_WEBHOOK_PORT";
-export const WEBHOOK_PATH_ENV = "PIPARA_WEBHOOK_PATH";
-export const WEBHOOK_DIR_ENV = "PIPARA_WEBHOOK_DIR";
+/** Signing key, under the provider's own name. */
+export const WEBHOOK_SECRET_ENV = "PARALLEL_WEBHOOK_KEY";
+export const WEBHOOK_SCHEME_ENV = "WEBTASKS_WEBHOOK_SCHEME";
+export const WEBHOOK_PORT_ENV = "WEBTASKS_WEBHOOK_PORT";
+export const WEBHOOK_PATH_ENV = "WEBTASKS_WEBHOOK_PATH";
+/** The shared pi-webtasks store directory. The receiver and the Pi session must use the same value. */
+export const WEBTASKS_DIR_ENV = "WEBTASKS_DIR";
 
 const HEADERS_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -245,18 +241,13 @@ async function handleRequest(input: {
 }
 
 /**
- * Fallback artifact root for the standalone receiver. Matches the legacy
- * `<agent-dir>/parallelized/results` layout when that directory is known.
- * A registration's artifact_dir overrides this.
+ * Fallback artifact root for the standalone receiver: `<agent-dir>/webtasks/results`, the same place the
+ * Pi session uses. The agent dir follows PI_CODING_AGENT_DIR, else Pi's default `~/.pi/agent`. A
+ * registration's artifact_dir overrides this.
  */
-export function legacyResultDir(webhookDir: string, env: NodeJS.ProcessEnv = process.env): string {
-  const agent = env.PI_CODING_AGENT_DIR?.trim();
-  if (agent) return join(agent, "parallelized", "results");
-  const base = resolve(webhookDir);
-  if (basename(base) === "webhooks" && basename(dirname(base)) === "parallelized") {
-    return join(dirname(base), "results");
-  }
-  return join(base, "results");
+export function defaultResultsDir(env: NodeJS.ProcessEnv = process.env): string {
+  const agent = env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".pi", "agent");
+  return join(agent, "webtasks", "results");
 }
 
 function listen(server: ReturnType<typeof createServer>, port: number, host: string): Promise<void> {
@@ -304,9 +295,9 @@ function envConfig(env: NodeJS.ProcessEnv): {
   if (typeof secret !== "string" || secret.trim().length === 0) {
     throw new Error(`${WEBHOOK_SECRET_ENV} is required`);
   }
-  const dir = env[WEBHOOK_DIR_ENV];
+  const dir = env[WEBTASKS_DIR_ENV];
   if (typeof dir !== "string" || dir.trim().length === 0) {
-    throw new Error(`${WEBHOOK_DIR_ENV} is required (share with consumer; conventional path: <agent-dir>/${CONVENTIONAL_WEBHOOK_INBOX_DIR})`);
+    throw new Error(`${WEBTASKS_DIR_ENV} is required (share it with the pi-webtasks session; default <agent-dir>/webtasks)`);
   }
   const schemeRaw = env[WEBHOOK_SCHEME_ENV] ?? DEFAULT_WEBHOOK_SCHEME;
   if (schemeRaw !== "standard" && schemeRaw !== "legacy") {
@@ -330,7 +321,7 @@ async function cliMain(): Promise<void> {
   const worker = new WebhookWorker({
     inbox,
     getClient: researchClient,
-    artifactDir: legacyResultDir(dir),
+    artifactDir: defaultResultsDir(),
     onLog: msg => process.stderr.write(`${msg}\n`),
   });
   const receiver = await startWebhookReceiver({
@@ -357,7 +348,7 @@ async function cliMain(): Promise<void> {
 
 if (isDirectRun()) {
   cliMain().catch(err => {
-    const message = err instanceof Error ? err.message : "webhook receiver failed";
+    const message = err instanceof Error ? err.message : "pi-webtasks receiver failed";
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
   });

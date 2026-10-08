@@ -16,7 +16,7 @@
     "test": "node --test tests/*.test.ts",
     "test:bench": "node --test bench/*.test.ts",
     "test:live": "node scripts/live-check.ts",
-    "webhook:receiver": "node src/webhook-receiver.ts",
+    "webtasks:receiver": "node src/webhook-receiver.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:bench": "tsc --ignoreConfig --types node --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --allowImportingTsExtensions --skipLibCheck bench/*.ts",
     "check": "npm run typecheck && npm test",

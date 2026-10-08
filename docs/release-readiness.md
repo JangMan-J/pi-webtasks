@@ -23,7 +23,7 @@ Status: implementation in progress. No installation or publication occurred.
 | Entity transport | One synchronous SDK request with the beta header, no callback or group, full artifact, bounded preview, and no public set ID. |
 | Native runtime | Installed Pi reports `1.0.4`; Node reports `v26.10.0`. |
 | Prior model set | `anthropic/claude-sonnet-5-5`, `antigravity/gemini-3.7-flash`, and `openai-codex/gpt-6.1-sol` appear in the current model catalog. |
-| Current receiver | An existing user-systemd process serves `127.0.0.1:8787/parallel/webhook`. GET returns 405. |
+| Earlier receiver observation | A user-systemd receiver was reported at `127.0.0.1:8787/parallel/webhook`, and GET returned 405. This was not re-verified in this checkout, and the receiver may belong to another account. |
 | Current ingress | An existing Cloudflare tunnel targets the receiver. Its configured HTTPS URL fails DNS resolution from this machine. This no longer blocks `deep_search`, which needs no public callback. |
 | Outbound completion | Implemented on `feature/outbound-completion`, with offline implementation and tests using fake clients (`tests/outbound.test.ts`, plus the consumer and lifecycle suites). Findings from the independent review are fixed in this branch. Contract basis is the Task Group API docs and `parallel-web` 1.3.3. |
 
@@ -53,7 +53,7 @@ Caller-defined strict output schemas remain an open contract choice.
 ## Checkout versus installed copy
 
 This repository is the implementation target.
-The optional running receiver uses `~/.pi/agent/git/github.com/JangMan-J/pi-parallelized/src/webhook-receiver.ts`.
+The installed receiver's code location, `~/.pi/agent/git/github.com/JangMan-J/pi-parallelized/src/webhook-receiver.ts`, is unverified on this machine. The path is absent under this account, and it may belong to another account. Nothing here reads or changes it.
 Its installed code does not acquire this checkout's changes through a source edit here.
 `deep_search` does not depend on it. Using the optional receiver with this checkout needs a separate deployment into the existing process configuration.
 That deployment and any public-route repair remain separate from local release preparation.

@@ -69,7 +69,7 @@ test("login shows the key page, then asks for a secret, and returns the trimmed 
   const credential = await provider.auth.apiKey.login(interactionAnswering("  synthetic-login-key  ", log, events, prompts));
   assert.deepEqual(log, ["notify", "prompt"], "the link is shown before the prompt");
   assert.equal(events[0].type, "auth_url");
-  assert.equal(events[0].url, "https://platform.parallel.ai/settings?tab=api-key");
+  assert.equal(events[0].url, "https://platform.parallel.ai/settings?tab=api-keys");
   assert.deepEqual(prompts, [{ type: "secret", message: "Parallel API key" }]);
   assert.deepEqual(credential, { type: "api_key", key: "synthetic-login-key" });
 });

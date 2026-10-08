@@ -5,7 +5,7 @@
 import type { ApiKeyCredential, Provider, ProviderAuthInteraction } from "@earendil-works/pi-ai";
 
 export const PARALLEL_PROVIDER_ID = "parallel";
-export const PARALLEL_KEY_URL = "https://platform.parallel.ai/settings?tab=api-key";
+export const PARALLEL_KEY_URL = "https://platform.parallel.ai/settings?tab=api-keys";
 export const PARALLEL_KEY_PROMPT = "Parallel API key";
 
 /**

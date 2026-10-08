@@ -16,7 +16,7 @@ Installation, publication, and changes to the running receiver remain separate.
 - **Effort:** user-confirmed policy. Default is `low`, with no automatic escalation.
 - **MCP:** an alternative, not an approved replacement. Its documented later-turn result retrieval does not establish automatic offline delivery.
 
-## Three commands
+## Three tools
 
 Each object rejects unknown fields. Semantic validation runs before paid requests.
 Blank strings, invalid URLs, invalid domains, and incompatible argument combinations are errors.
@@ -157,8 +157,8 @@ The internal collector's snapshot polling is separate and bounded by backoff.
 | FindAll events | None for new work | Outbound or webhook completion replaces transport, not enumeration semantics. |
 | Monitor create/update/trigger/cancel/list/events | None | Explicitly excluded from the three-tool interface. Preserve accepted legacy registrations. |
 | Remote Memory retrieve/evict/clear | None | Local references do not reproduce remote memory administration. No deletion control. |
-| Account management | `/webtasks login`, `/webtasks logout`, and `/webtasks balance` | No account model tool or new administration commands. |
-| Legacy callback recovery | `/webtasks recover` command | Human recovery remains available for accepted work. |
+| Account management | No commands and no account tool. Credentials come from the environment or the key file. | No account model tool or administration surface. |
+| Failed result fetch | Retried once when the owning session next starts | No manual recover command; the retry is a read, never a submission. |
 
 ### Entity coverage is deliberately narrow
 
@@ -193,7 +193,7 @@ That capability needs an explicit creation-time contract decision, not a new ret
 
 | Old option family | New treatment |
 | --- | --- |
-| `action` and operation selectors | Removed. The command and its argument combination select the branch. |
+| `action` and operation selectors | Removed. The tool and its argument combination select the branch. |
 | Search `objective`, `search_queries`; Extract focus | Derived from `web_search.query`. No keyword-query expansion model call. |
 | Entity type/objective/count | `web_search.entity` selects people/companies; query supplies objective; backend default is 100. No count knob. |
 | Search `mode` | Derived from discovery `effort`: low/fast, medium/basic, high/advanced. No processor names in arguments. |
@@ -220,7 +220,7 @@ That capability needs an explicit creation-time contract decision, not a new ret
 | Monitor frequency/backfill/snapshot controls | Omitted because monitoring is excluded. |
 | `return_mode`, preview budget | Internal readable preview with complete saved evidence. No public transport/output selector. |
 | `output_path`, overwrite | Automatic private artifacts that never overwrite existing evidence. Caller can read or copy the returned file. |
-| Authentication, balance, keys and credit | Existing human authentication/balance commands only. No new account operations or automatic credit. |
+| Authentication, balance, keys and credit | No commands. No account operations or automatic credit. |
 
 ## Effort policy and evidence
 
@@ -304,9 +304,9 @@ A run seen through both paths is notified once per reported status, persistently
 
 ## MCP alternative
 
-| Question | Current three-command design | Official MCP tools |
+| Question | Current three-tool design | Official MCP tools |
 | --- | --- | --- |
-| Routine retrieval | One query/URL command plus native entity intent | Search MCP exposes `web_search` and `web_fetch`. |
+| Routine retrieval | One query/URL tool call plus native entity intent | Search MCP exposes `web_search` and `web_fetch`. |
 | Long research | Local references, lazy Task group, outbound SSE collector | Task MCP exposes create, group, status, and Markdown-result tools. |
 | Completion | In-session collector persists outcomes and routes owner notifications | Current docs require an additional turn to request ready results. |
 | Offline owner | Collection pauses while Pi is closed and resumes by snapshot on startup. An optional receiver can save results offline. | Automatic offline artifact storage and session routing are not established. |

@@ -223,3 +223,90 @@ test("signed matching metadata completes before addRuns returns without losing t
     await inbox.close();
   }
 });
+
+// Seeds one settled run whose result fetch already failed once, as an earlier session left it.
+async function seedFailedFetch(storeDir: string, workDir: string): Promise<void> {
+  const inbox = new WebhookInbox(storeDir);
+  try {
+    const now = Date.now();
+    await inbox.createResearch({
+      reference: "research_retry", session_id: "s-retry", group_id: "tgrp_retry", query: "retry me", effort: "low",
+      status: "dispatching", artifact_dir: join(workDir, "agent", "webtasks", "results"), created_at: now, updated_at: now,
+    });
+    await inbox.acceptResearch("research_retry", "trun_retry");
+    await inbox.put({
+      webhook_id: "wh-retry", event: { type: "task_run.status", data: { run_id: "trun_retry", status: "completed" } },
+      resource_id: "trun_retry", kind: "task", event_type: "task_run.status",
+    });
+    await inbox.recordFetchFailure("wh-retry", "HTTP 500 on the first result fetch");
+  } finally {
+    await inbox.close();
+  }
+}
+
+/** A write of an unrelated event: its only effect is a watcher-driven pass over the store. */
+async function unrelatedInboxWrite(storeDir: string, id: string): Promise<void> {
+  const inbox = new WebhookInbox(storeDir);
+  try {
+    await inbox.put({ webhook_id: id, event: { type: "unrelated.event" } });
+  } finally {
+    await inbox.close();
+  }
+}
+
+async function entryState(storeDir: string, id: string): Promise<{ handled: boolean; fetchFailed: boolean } | undefined> {
+  const inbox = new WebhookInbox(storeDir);
+  try {
+    const entry = (await inbox.listAll()).find(e => e.webhook_id === id);
+    return entry && { handled: entry.handled, fetchFailed: entry.fetch_failed === true };
+  } finally {
+    await inbox.close();
+  }
+}
+
+test("a failed result fetch is retried once on the next session start, and delivered once", async t => {
+  let results = 0;
+  const h = await setup(t, async ({ path }) => {
+    if (path === "/v1/tasks/runs/trun_retry/result") {
+      results++;
+      return json({ run: { run_id: "trun_retry", interaction_id: "interaction_retry" }, output: { content: "retried answer" } });
+    }
+    throw new Error(`Unexpected outbound path: ${path}`);
+  }, { sessionId: "s-retry" });
+  await seedFailedFetch(h.inboxDir, h.dir);
+  await h.start();
+  await waitFor(() => h.sent.length === 1);
+  assert.equal(results, 1, "the session start performed the one retry");
+  assert.equal((await entryState(h.inboxDir, "wh-retry"))?.handled, true);
+  // Later inbox writes and watcher passes do not fetch again: the entry is already handled.
+  await unrelatedInboxWrite(h.inboxDir, "wh-noise-a");
+  await delay(600);
+  assert.equal(results, 1, "no repeat fetch after success");
+  assert.equal(h.sent.length, 1, "delivered once");
+  await h.stop();
+});
+
+test("a fetch that fails again on the session start is not retried by later watcher passes or inbox writes", async t => {
+  let results = 0;
+  const h = await setup(t, async ({ path }) => {
+    if (path === "/v1/tasks/runs/trun_retry/result") {
+      results++;
+      return new Response("upstream unavailable", { status: 500 });
+    }
+    throw new Error(`Unexpected outbound path: ${path}`);
+  }, { sessionId: "s-retry" });
+  await seedFailedFetch(h.inboxDir, h.dir);
+  await h.start();
+  assert.equal(results, 1, "the session start performed its one retry, which failed");
+  assert.equal((await entryState(h.inboxDir, "wh-retry"))?.fetchFailed, true, "the failure stays recorded for the next start");
+  assert.equal(h.sent.length, 0, "nothing is delivered for a failed fetch");
+
+  // A second inbox write drives a watcher pass. That pass must process the write and leave the failed fetch alone.
+  await unrelatedInboxWrite(h.inboxDir, "wh-noise-b");
+  await waitFor(async () => (await entryState(h.inboxDir, "wh-noise-b"))?.handled === true);
+  await delay(300);
+  assert.equal(results, 1, "a watcher pass and a second inbox write do not repeat the failed fetch");
+  assert.equal((await entryState(h.inboxDir, "wh-retry"))?.handled, false);
+  assert.equal(h.sent.length, 0);
+  await h.stop();
+});

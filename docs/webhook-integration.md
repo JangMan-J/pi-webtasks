@@ -14,7 +14,7 @@ The older [research review](webhook-integration-review.md) records historical fi
 - `src/webhook-receiver.ts`: one shared HTTP receiver, with signature verification and a bounded request body.
 - `src/webhook-inbox.ts`: a private SQLite inbox, resource ownership records, duplicate detection, and processing claims.
 - `src/webhook-consumer.ts`: event-driven result retrieval and pending notifications.
-- `src/index.ts`: resource registration, session lifecycle, notification delivery, and the `/webtasks` command.
+- `src/index.ts`: resource registration, session lifecycle, and notification delivery. The extension registers no commands.
 
 The receiver stores authenticated events before it acknowledges them.
 A callback can arrive before the creation response. The consumer retains it until the local resource registration appears.
@@ -109,10 +109,9 @@ Search, Extract, and Responses do not gain callback support through this integra
 
 The consumer watches local inbox changes and performs startup recovery. It does not poll Parallel status endpoints.
 Each result request is bounded and uses no automatic SDK retry.
-A failed fetch remains saved until an explicit retry. Inbox writes must not cause a retry loop.
+A failed fetch remains saved. It is retried once when the owning session next starts. A retry is a read of the saved run, never a new submission.
+Watcher passes and inbox writes never retry a failed fetch, so a fetch that fails again waits for the next session start. There is no manual recover command.
 
-- `/webtasks status` reports store and session ownership counts.
-- `/webtasks recover` retries this session's failed retrievals and processes pending completions.
 - A closed session retains its pending work for a later resume.
 - Each Monitor detection has its own notification state, so later events do not replace earlier notifications.
 

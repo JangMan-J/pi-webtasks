@@ -1,13 +1,9 @@
 import "./env.ts";
-import { mkdir, writeFile, readFile, unlink, chmod } from "node:fs/promises";
-import { homedir, arch, platform, release, type as osType, version as osVersion } from "node:os";
-import { dirname, resolve } from "node:path";
 import { domainToASCII } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Parallel, APIError, APIConnectionTimeoutError } from "parallel-web";
 import { verifyWebhook } from "./webhook.ts";
-import { PartialResponseError, errorData, redact, researchFailure, researchOutput, writeOutput } from "./results.ts";
-export { redact, writeOutput } from "./results.ts";
+import { PartialResponseError, errorData, researchFailure, researchOutput } from "./results.ts";
 
 export const PRICING = {
   search: "USD: turbo/fast $1/1k requests (10 results), basic/advanced $5/1k; extra results $1/1k.",
@@ -21,10 +17,6 @@ export const PRICING = {
 export const SEARCH_DEFAULTS = { max_results: 20, max_chars_total: 50_000, max_chars_per_result: 10_000 } as const;
 export const EXTRACT_DEFAULTS = { max_chars_total: 100_000, max_chars_per_result: 20_000, full_content: true } as const;
 
-const PLATFORM = process.env.PARALLEL_PLATFORM_URL?.replace(/\/$/, "") || "https://platform.parallel.ai";
-const SERVICE = process.env.PARALLEL_SERVICE_API_URL?.replace(/\/$/, "") || "https://api.parallel.ai/account";
-const ACCOUNT_SCOPE = "keys:read keys:create keys:delete apps:read apps:create apps:delete balance:read balance:add";
-const ACCOUNT_PATH = resolve(homedir(), ".config/pi-webtasks/account.json");
 
 export type CallOpts = {
   signal?: AbortSignal;
@@ -49,12 +41,6 @@ export function parseJson(value: unknown, name: string): unknown {
   }
 }
 
-export function dump(value: unknown, max = 60_000): string {
-  const s = JSON.stringify(redact(value), null, 2);
-  if (s.length <= max) return s;
-  return `${s.slice(0, max)}\n… truncated ${s.length - max} chars`;
-}
-
 export function formatError(err: unknown): string {
   if (err instanceof APIError) {
     return JSON.stringify(errorData(err), null, 2);
@@ -68,7 +54,7 @@ export async function loadResearchApiKey(): Promise<string> {
   // Read at call time, so a key exported after import still works. The provider's own name is preferred.
   const key = (process.env._PARALLEL_API_KEY ?? process.env.PARALLEL_API_KEY)?.trim();
   if (!key) {
-    throw new Error("Parallel API key missing. Set _PARALLEL_API_KEY in the environment (PARALLEL_API_KEY is also accepted).");
+    throw new Error("Parallel API key missing. Set _PARALLEL_API_KEY in the environment, or put it in .env or parallel.env beside the package manifest. PARALLEL_API_KEY is also accepted.");
   }
   cachedKey = key;
   return cachedKey;
@@ -190,19 +176,6 @@ async function collectStream(
     clearTimeout(timer);
   }
   return { events, last_event_id, limit_reached };
-}
-
-function maybeArtifact(args: ToolArgs, cwd: string | undefined, data: unknown): Promise<string | undefined> {
-  const path = str(args.output_path);
-  if (!path) return Promise.resolve(undefined);
-  if (!cwd) throw new Error("output_path needs a working directory");
-  return writeOutput(cwd, path, data, args.overwrite === true);
-}
-
-async function accountOutput(args: ToolArgs, opts: CallOpts | undefined, data: unknown): Promise<unknown> {
-  const safe = redact(data);
-  const artifact = await maybeArtifact(args, opts?.cwd, safe);
-  return artifact ? { artifact, data: safe } : safe;
 }
 
 function wrap(args: ToolArgs, opts: CallOpts | undefined, data: unknown) {
@@ -791,259 +764,6 @@ export async function memory(client: Parallel, args: ToolArgs, opts?: CallOpts):
     return wrap(args, opts, { cleared: true, ...scope });
   }
   throw new Error(`unknown memory action ${action}`);
-}
-
-type AccountFile = {
-  client_id?: string;
-  access_token?: string;
-  refresh_token?: string;
-  access_expires_at?: number;
-  refresh_expires_at?: number;
-  org_id?: string;
-  scopes?: string[];
-};
-
-async function readAccount(): Promise<AccountFile> {
-  try {
-    return JSON.parse(await readFile(ACCOUNT_PATH, "utf8")) as AccountFile;
-  } catch {
-    return {};
-  }
-}
-
-async function writeAccount(data: AccountFile): Promise<void> {
-  await mkdir(dirname(ACCOUNT_PATH), { recursive: true, mode: 0o700 });
-  await writeFile(ACCOUNT_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
-  await chmod(ACCOUNT_PATH, 0o600);
-}
-
-async function postForm(url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams(body),
-  });
-  const text = await res.text();
-  let json: Record<string, unknown> = {};
-  try {
-    json = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    json = { raw: text };
-  }
-  if (!res.ok) throw new Error(JSON.stringify({ status: res.status, error: json }));
-  return json;
-}
-
-export async function registerAccountClient(): Promise<string> {
-  const stored = await readAccount();
-  if (stored.client_id) return stored.client_id;
-  const res = await fetch(`${PLATFORM}/getServiceKeys/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      client_name: "pi-webtasks",
-      platform: {
-        machine: arch(),
-        os_name: platform() === "win32" ? "nt" : "posix",
-        processor: arch(),
-        release: release(),
-        system: osType(),
-        version: osVersion(),
-      },
-    }),
-  });
-  const json = (await res.json()) as { client_id?: string };
-  if (!res.ok || !json.client_id) throw new Error(`client registration failed: ${res.status} ${dump(json)}`);
-  stored.client_id = json.client_id;
-  await writeAccount(stored);
-  return json.client_id;
-}
-
-export type DeviceLogin = {
-  client_id: string;
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete?: string;
-  interval: number;
-  expires_in: number;
-};
-
-export async function beginDeviceLogin(): Promise<DeviceLogin> {
-  const client_id = await registerAccountClient();
-  const json = await postForm(`${PLATFORM}/getServiceKeys/device/code`, { client_id, scope: ACCOUNT_SCOPE });
-  return {
-    client_id,
-    device_code: String(json.device_code),
-    user_code: String(json.user_code),
-    verification_uri: String(json.verification_uri),
-    verification_uri_complete: json.verification_uri_complete ? String(json.verification_uri_complete) : undefined,
-    interval: Number(json.interval) || 5,
-    expires_in: Number(json.expires_in) || 600,
-  };
-}
-
-function persistTokens(json: Record<string, unknown>, client_id: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  return writeAccount({
-    client_id,
-    access_token: String(json.access_token),
-    refresh_token: String(json.refresh_token),
-    access_expires_at: now + Number(json.expires_in || 0),
-    refresh_expires_at: now + Number(json.refresh_token_expires_in || 0),
-    org_id: json.org_id ? String(json.org_id) : undefined,
-    scopes: typeof json.scope === "string" ? json.scope.split(/\s+/) : undefined,
-  });
-}
-
-export async function pollDeviceLogin(info: DeviceLogin, opts?: CallOpts): Promise<{ org_id?: string }> {
-  const deadline = Date.now() + info.expires_in * 1000;
-  let interval = Math.max(info.interval, 1) * 1000;
-  while (Date.now() < deadline) {
-    if (opts?.signal?.aborted) throw new Error("login cancelled");
-    opts?.onProgress?.("Waiting for Parallel account approval…");
-    try {
-      const json = await postForm(`${PLATFORM}/getServiceKeys/token`, {
-        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        client_id: info.client_id,
-        device_code: info.device_code,
-      });
-      await persistTokens(json, info.client_id);
-      return { org_id: json.org_id ? String(json.org_id) : undefined };
-    } catch (err) {
-      const msg = formatError(err);
-      if (msg.includes("authorization_pending")) {
-        await new Promise((r) => setTimeout(r, interval));
-        continue;
-      }
-      if (msg.includes("slow_down")) {
-        interval += 5000;
-        await new Promise((r) => setTimeout(r, interval));
-        continue;
-      }
-      if (msg.includes("access_denied")) throw new Error("login denied");
-      if (msg.includes("expired_token")) throw new Error("device code expired; run /webtasks login again");
-      throw err;
-    }
-  }
-  throw new Error("device code expired; run /webtasks login again");
-}
-
-async function refreshTokens(stored: AccountFile): Promise<AccountFile> {
-  if (!stored.refresh_token || !stored.client_id) throw new Error("no Parallel account session; run /webtasks login");
-  const json = await postForm(`${PLATFORM}/getServiceKeys/token`, {
-    grant_type: "refresh_token",
-    refresh_token: stored.refresh_token,
-    client_id: stored.client_id,
-  });
-  await persistTokens(json, stored.client_id);
-  return readAccount();
-}
-
-export async function getAccessToken(): Promise<string> {
-  let stored = await readAccount();
-  const now = Math.floor(Date.now() / 1000);
-  if (!stored.access_token && !stored.refresh_token) throw new Error("no Parallel account session; run /webtasks login");
-  if (stored.refresh_expires_at && stored.refresh_expires_at < now) throw new Error("account refresh token expired; run /webtasks login");
-  if (!stored.access_token || (stored.access_expires_at && stored.access_expires_at < now + 60)) {
-    stored = await refreshTokens(stored);
-  }
-  if (!stored.access_token) throw new Error("no Parallel account session; run /webtasks login");
-  return stored.access_token;
-}
-
-export async function accountLogout(): Promise<void> {
-  const stored = await readAccount();
-  if (stored.refresh_token) {
-    try {
-      await postForm(`${PLATFORM}/getServiceKeys/token/revoke`, { refresh_token: stored.refresh_token });
-    } catch {
-      // ponytail: still drop local tokens if revoke fails
-    }
-  }
-  try {
-    await unlink(ACCOUNT_PATH);
-  } catch {
-    await writeAccount({ client_id: stored.client_id });
-  }
-}
-
-async function accountFetch(path: string, init: RequestInit = {}): Promise<unknown> {
-  const token = await getAccessToken();
-  const res = await fetch(`${SERVICE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(init.headers || {}),
-    },
-  });
-  const text = await res.text();
-  let body: unknown = text;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    /* keep text */
-  }
-  if (!res.ok) throw new Error(JSON.stringify({ status: res.status, error: body }, null, 2));
-  return body;
-}
-
-export async function account(args: ToolArgs, opts?: CallOpts): Promise<unknown> {
-  const wrap = accountOutput;
-  const action = str(args.action) || "balance";
-  if (action === "balance") return wrap(args, opts, await accountFetch("/service/v1/balance"));
-  if (action === "list_apps") return wrap(args, opts, await accountFetch("/service/v1/apps"));
-  if (action === "add_credit") {
-    const amount_cents = num(args.amount_cents);
-    if (!amount_cents || amount_cents < 1 || amount_cents > 10_000) throw new Error("amount_cents must be 1–10000");
-    const idempotency_key = str(args.idempotency_key);
-    if (!idempotency_key || idempotency_key.length < 8) throw new Error("idempotency_key required (min 8 chars); reuse it to avoid double charges");
-    return wrap(
-      args,
-      opts,
-      await accountFetch("/service/v1/balance/add", { method: "POST", body: JSON.stringify({ amount_cents, idempotency_key }) }),
-    );
-  }
-  if (action === "create_app") {
-    const app_name = str(args.app_name);
-    if (!app_name) throw new Error("app_name required");
-    return wrap(args, opts, await accountFetch("/service/v1/apps", { method: "POST", body: JSON.stringify({ app_name }) }));
-  }
-  if (action === "delete_app") {
-    const app_id = str(args.app_id);
-    if (!app_id) throw new Error("app_id required");
-    return wrap(args, opts, await accountFetch(`/service/v1/apps/${app_id}`, { method: "DELETE" }));
-  }
-  if (action === "create_key") {
-    const app_id = str(args.app_id);
-    const api_key_name = str(args.api_key_name);
-    if (!app_id || !api_key_name) throw new Error("app_id and api_key_name required");
-    const created = (await accountFetch(`/service/v1/apps/${app_id}/keys`, {
-      method: "POST",
-      body: JSON.stringify({ api_key_name }),
-    })) as Record<string, unknown>;
-    const save_key_path = str(args.save_key_path);
-    if (!save_key_path) throw new Error("save_key_path required; raw key is not returned to the model");
-    if (!opts?.cwd) throw new Error("save_key_path needs a working directory");
-    const abs = await writeOutput(opts.cwd, save_key_path, created, args.overwrite === true);
-    await chmod(abs, 0o600);
-    return {
-      api_key_id: created.api_key_id,
-      api_key_name: created.api_key_name,
-      app_id: created.app_id,
-      display_value: created.display_value,
-      saved_to: abs,
-    };
-  }
-  if (action === "delete_key") {
-    const app_id = str(args.app_id);
-    const api_key_id = str(args.api_key_id);
-    if (!app_id || !api_key_id) throw new Error("app_id and api_key_id required");
-    return wrap(args, opts, await accountFetch(`/service/v1/apps/${app_id}/keys/${api_key_id}`, { method: "DELETE" }));
-  }
-  throw new Error(`unknown account action ${action}`);
 }
 
 export { verifyWebhook };

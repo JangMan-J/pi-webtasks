@@ -47,20 +47,14 @@ test("exactly three tools with closed schemas and no backend vocabulary", async 
   }
 });
 
-test("one command, /webtasks: no argument lists its subcommands; unknown names get the same list; the store is under webtasks/", async t => {
+test("the extension registers exactly three tools and no commands; the default store is under webtasks/", async t => {
   const h = await setup(t, () => json({}));
   await h.start();
-  assert.deepEqual([...h.commands.keys()], ["webtasks"]);
+  assert.deepEqual([...h.tools.keys()].sort(), ["deep_search", "interactive_search", "web_search"]);
+  assert.equal(h.commands.size, 0, "no commands are registered");
   assert.equal(existsSync(join(h.dir, "agent", "webtasks", "webtasks.sqlite")), true, "the default store is agent/webtasks/webtasks.sqlite");
   assert.equal(existsSync(join(h.dir, "agent", "parallelized")), false, "no legacy directory is created");
-  const notes: string[] = [];
-  const ctx = { ...h.ctx, ui: { notify: (m: string) => notes.push(m) } };
-  await h.commands.get("webtasks").handler("", ctx);
-  assert.match(notes[0]!, /^Usage: \/webtasks <command>/);
-  for (const sub of ["status", "recover", "login", "logout", "balance"]) assert.match(notes[0]!, new RegExp(`^  ${sub} `, "m"));
-  await h.commands.get("webtasks").handler("parallel-balance", ctx);
-  assert.match(notes[1]!, /^Unknown command "parallel-balance"\.\nUsage: \/webtasks <command>/);
-  assert.equal(h.calls.length, 0, "the listing and unknown names make no request");
+  assert.equal(h.calls.length, 0, "starting makes no request");
 });
 
 test("invalid input is rejected before any network request or setup", async t => {

@@ -43,6 +43,7 @@ export async function loadTools() {
   const loaded = await loadExtensions(manifest.pi.extensions.map((entry: string) => resolve(extensionDir, entry)), extensionDir, undefined, runtime);
   assert.deepEqual(loaded.errors, []);
   const extension = loaded.extensions[0];
+  assert.equal(extension.commands.size, 0, "the extension registers no commands");
   activeTools = [...extension.tools.keys()];
   const { buildSystemPromptSections } = await import(pathToFileURL(resolve(packageDir, "dist/core/system-prompt.js")).href);
   return {
@@ -74,6 +75,7 @@ export async function loadDirect() {
   };
   const { default: extension } = await import(pathToFileURL(resolve(extensionDir, "src/index.ts")).href);
   extension(pi);
+  assert.equal(commands.size, 0, "the extension registers no commands");
   return { tools, commands, handlers, sent, entries, activeTools: () => [...tools.keys()], buildSystemPromptSections: undefined };
 }
 

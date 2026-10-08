@@ -4,6 +4,7 @@ Status: implementation authorized. Tool coverage remains subject to [the mapping
 Installation, publication, and changes to the running receiver remain separate.
 Outbound completion and existing SQLite persistence are the design direction.
 Latest user decision ("switch us over") supersedes the earlier webhook-first decision.
+Latest user decision (no commands): the extension registers exactly three model tools and no slash commands. Credentials come from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY` in the environment, or from `.env` or `parallel.env` beside the package manifest. There is no device login, no balance command, and no account file. Failed result fetches retry once when the owning session next starts, with no manual recover. This supersedes "Keep existing human authentication, balance, and legacy recovery commands where needed", the `/webtasks` command surface in the rename decision below, and the human-command guidance in the implementation order.
 Latest user decision (rename): the project is pi-webtasks in every user-facing name. The store is `getAgentDir()/webtasks/webtasks.sqlite`, with results in `getAgentDir()/webtasks/results`. Settings use the `WEBTASKS_*` prefix, with `WEBTASKS_DIR` as the store directory. No `PIPARA_*` names or aliases remain, and no earlier store, results directory, or account file is read or migrated. The only user-facing command is `/webtasks` with `status`, `recover`, `login`, `logout`, and `balance`. The provider's own credential names (`_PARALLEL_API_KEY`, `PARALLEL_WEBHOOK_KEY`) are kept. This supersedes "The plan does not rename unrelated deployment settings" and the compatibility environment names.
 `deep_search` completes through outbound Task Group SSE with bounded background polling fallback, and mandatory webhooks are removed.
 This is implemented on branch `feature/outbound-completion`; live acceptance is pending.
@@ -156,7 +157,7 @@ Qualify these goals against real outputs before claiming feature equivalence.
 - Keep remote handles in internal records and diagnostic artifacts, not normal tool instructions or result control fields.
 - Use local references and artifact paths in completion messages.
 - Preserve citations, partial evidence, errors, and usable saved-file pointers.
-- Keep existing human authentication, balance, and legacy recovery commands where needed.
+- Keep existing human authentication, balance, and legacy recovery commands where needed. *Superseded by the no-commands decision at the top of this plan.*
 - Do not invent new account-management commands or a monitor surface.
 - Measure the rendered schemas and instructions. Do not claim token savings from shorter names alone.
 
@@ -354,7 +355,7 @@ Rules:
 
 Optional signed webhooks:
 If `WEBTASKS_WEBHOOK_URL` is set with a shared `WEBTASKS_DIR` and a running receiver (`PARALLEL_WEBHOOK_KEY`), runs also carry the per-run webhook.
-Legacy accepted work is recovered with `/webtasks recover`.
+Failed result fetches are retried once when the owning session next starts. There is no manual recover command.
 The receiver's shared worker is an optional accelerator for offline collection, not a requirement.
 Only handled and notified entries are pruned after 72 hours; unmatched callbacks and unacknowledged notifications remain retained.
 

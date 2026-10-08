@@ -97,6 +97,8 @@ Navigation outcomes, per model. There is no blanket navigation pass.
 
 - The rename to pi-webtasks is kept. The old store at `~/.pi/agent/parallelized/webhooks/webhooks.sqlite` is not read, and there is no legacy reader. Its 2 pending registrations are accepted as lost (Manager decision). Nothing in this checkout opened that file for this record.
 - Live acceptance so far is on `d4665e7`. The progress-only backoff rule was added after those runs and is covered by offline tests only.
+- Latest user decision: the `/webtasks` command is removed. The extension registers exactly three model tools and no commands. Credentials come only from `_PARALLEL_API_KEY` or `PARALLEL_API_KEY` in the environment, or from `.env` or `parallel.env` beside the package manifest. There is no device login, balance command, or account file. Manual `recover` is gone.
+- Behavior change: a failed result fetch is retried once when its owning session next starts. The retry is a read of the saved run, never a new submission. Watcher passes and inbox writes do not retry it. The earlier records above that used `/webtasks status`, `login`, `balance`, or `recover` describe the command that was removed.
 
 ## Remaining release checks
 

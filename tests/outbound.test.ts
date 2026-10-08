@@ -581,9 +581,14 @@ test("no callback configured: submit -> stream completion -> saved artifact -> o
   const read = await h.call("deep_search", { research: reference });
   assert.match(read.text, /Finding from the stream/);
 
-  const notes: string[] = [];
-  await h.commands.get("webtasks").handler("status", { ...h.ctx, ui: { notify: (m: string) => notes.push(m) } });
-  assert.match(notes.join("\n"), /pi-webtasks store .*1 registrations \(1 owned by this session\)/, "the status command reports the default store");
+  // The store itself, read directly: the run is registered to its owner and nothing is left pending.
+  const store = new WebhookInbox(h.inboxDir);
+  try {
+    assert.equal((await store.listRegistrations()).filter(r => r.session_id === "session-a").length, 1, "the run is registered to its owning session");
+    assert.equal((await store.listPending()).length, 0, "nothing is left pending after the notice");
+  } finally {
+    await store.close();
+  }
 });
 
 test("closed while running: the completion that arrives during the closed period is delivered on the next start", async t => {

@@ -33,7 +33,7 @@ No paid research runs during the offline suite.
 
 The old nine-tool test files remain under `tests/legacy/`.
 Historical experiments remain under `bench/` and `docs/`.
-They do not establish acceptance of the three-command interface.
+They do not establish acceptance of the three-tool interface.
 
 ## Credentials
 
@@ -42,12 +42,10 @@ The latter is the signing secret, not the research key.
 Exported settings take precedence over adjacent `.env` or `parallel.env` key files.
 Credential files are not packaged or committed.
 
-Account sign-in is `/webtasks login`; `/webtasks logout` and `/webtasks balance` act on the same account.
-The device login stores its token in `~/.config/pi-webtasks/account.json`. The earlier `pi-parallelized` account file is not read, so sign in again after this rename.
+The extension has no commands and no device login. It reads the key only from the environment or the key files above, and checks nothing else on disk. Balance is not shown by the extension; check the provider account directly.
 
 Do not paste credential values into tool arguments, diagnostics, or source files.
 The extension does not create accounts, keys, credit purchases, or monitors.
-Existing human login, logout, balance, and callback recovery commands remain.
 
 ## Examples
 
@@ -155,7 +153,7 @@ Signed webhooks are optional.
 With `WEBTASKS_WEBHOOK_URL`, a shared `WEBTASKS_DIR`, and a running receiver (`PARALLEL_WEBHOOK_KEY`), runs also carry a per-run webhook.
 The same run seen through both paths is notified once per reported status. A concurrent duplicate result fetch across processes is still possible; it is an idempotent read that can add one extra artifact, and no paid request repeats.
 The receiver's shared worker can then save results while Pi is closed.
-Legacy accepted work is recovered with `/webtasks recover`.
+Failed result fetches are retried once when the owning session next starts. There is no manual recover command.
 Loading the extension starts no HTTP listener.
 
 A receiver installed from the earlier `pi-parallelized` checkout is not verified on this machine. Its location is absent under this account and may belong to another account. Changing files in this checkout does not update any running process.

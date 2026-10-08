@@ -12,12 +12,12 @@ The API Keys link correction is integrated through `5e81012`; the correct tab is
 User confirmed the link works, then identified `https://docs.parallel.ai/integrations/account-api` as the correct login surface.
 User selected browser PKCE after asking which option supports sign-in without copying a key.
 Lead now owns PKCE implementation; device flow and account key/app creation were not selected.
-PKCE candidate `8f50640` is delivered but not integrated: Manager found and reproduced an uncaught malformed-callback URL crash.
+PKCE candidate `8f50640` is integrated with Manager callback guard and regression in merge commit `1937317`.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated.
-2. Review the Lead's PKCE callback parsing fix and regression after candidate `8f50640`; native API-key fallback remains.
+2. Browser PKCE is integrated; real approval/token exchange is still unverified and requires the user's sign-in.
 3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 4. Treat installation/publication and optional receiver deployment as separate work.
 5. If source changes after this handoff, rerun proportionate checks before further integration.
@@ -36,6 +36,8 @@ The primary checkout now contains the accepted implementation.
 - CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
 - Native `/login` assignment is resolved and integrated at `36f8423`, following `result:login-finish#1`.
 - `result:account-api#1` established distinct account-device and research-key PKCE flows; Lead now implements the selected browser PKCE path.
+- PKCE implementation is resolved as `result:login-finish#2`, with contract `result:pkce-contract#1`.
+  Manager took the follow-up directly after Lead reported missing Herdsman delegation files; no delegation installation was changed.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -127,6 +129,7 @@ Important branch commits:
 | `7f561f3` | Remove tool-price guidance; reposition deep research |
 | `36f8423` | Native Parallel API-key provider login, no models, per-call credential resolution |
 | `5e81012` | Correct dashboard link to `settings?tab=api-keys` |
+| `1937317` | Merge browser PKCE login with malformed callback guard |
 
 Manager reruns at `55a0915`: typecheck passed; tests 169/169; `check:all` exit 0, bench 84/84, curate 361 checks.
 Manager reruns at `3450752`: typecheck passed; tests 166/166.
@@ -146,6 +149,10 @@ Installed Pi 1.1.0 scripted-PTY test in an isolated profile confirmed Parallel l
 Evidence index: `~/.cache/pi-webtasks-login-evidence/EMPIRICAL.md`.
 Manager reran the login-link test at `5e81012`: one selected test passed.
 Lead reports full `check:all` passed at that revision; browser navigation to the corrected page has not been rerun by Manager.
+Manager rerun for `1937317`: `check:all` exit 0, main 198/198, bench 84/84, curate 361 checks.
+Malformed-target regression failed on the candidate with uncaught `ERR_INVALID_URL` and passed with the guard.
+It confirms HTTP 400, no token request from malformed input, then a valid callback and one synthetic token exchange.
+`npm pack --dry-run --json` lists 22 intended files, no credential or runtime artifacts.
 Earlier failures were a test executing before session startup and a stale bench path; both were fixed.
 
 ## Live findings
@@ -204,7 +211,7 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   A human login with real credentials has not been exercised.
   Fixing Pi's prompt or post-login message is outside this scope.
   Manager verified existing settings load this primary checkout; no settings change or separate install is needed, just reload/restart.
-- OAuth decision: browser PKCE `/getKeys/` with research-key access, alongside native API-key paste.
+- OAuth decision and implemented flow: browser PKCE `/getKeys/` with research-key access, alongside native API-key paste.
   Device Account API `/getServiceKeys/` tokens are account-only and were not selected.
   PKCE implementation must verify exact client registration, redirect URI, authorization/token fields, expiry and refresh semantics.
   Use a temporary loopback-only listener, cryptographic state and PKCE S256, callback validation, cancellation/timeout, and cleanup on every outcome.
@@ -219,9 +226,13 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Synthetic native-PTY evidence: `~/.cache/pi-webtasks-login-evidence/pkce/EVIDENCE.md`.
   Menus/authorize URL and loopback binding/cancel/deny/bad-state cleanup passed; no real browser approval or live token exchange was attempted.
   Manager's raw local probe `GET http://[ HTTP/1.1` crashed at `parallel-oauth.ts:112` with uncaught `ERR_INVALID_URL`.
-  Lead owns the minimal parsing guard and regression: malformed input must return 400, make no token request, and allow subsequent valid auth.
-  Lead also corrects two misleading statements: README's listener closes only when login completes/cancels, not at the 120-second paste threshold; callback page must not claim sign-in finished before token exchange.
-  Candidate remains off `master` pending these fixes; no real credentials/auth/account/research calls are authorized by this review.
+  Manager implemented the minimal parsing guard and regression after taking the Lead's offered handoff.
+  Malformed input now returns 400, makes no token request, and allows subsequent valid auth.
+  README accurately states that the listener remains open during the manual-paste prompt after 120 seconds.
+  Callback page reports authorization received rather than falsely claiming sign-in finished before token exchange.
+  Implemented login path: reload/restart Pi, `/login` → Sign in with an account → Parallel, approve in browser and select an existing key or create one.
+  Callback/paste handling uses state and PKCE; the listener closes after success/error/cancel.
+  No real credentials/auth/account/research calls occurred during implementation or review.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.
@@ -243,5 +254,5 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Other CLIs' charges are unknown.
   Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
-- `master` includes the accepted implementation through `5e81012`.
+- `master` includes the accepted implementation through `1937317`.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

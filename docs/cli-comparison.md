@@ -10,7 +10,7 @@ Prompts were the same text for every arm (`~/.cache/pi-webtasks-compare/prompts.
 
 Citation spot-check: up to two URLs from each saved answer, fetched with free HTTP. 102 fetches, 79 HTTP 200, 55 of those pages contained a rubric token that also appeared in the answer. A token on the page is not a full claim check. Fetches that failed are not counted as support.
 
-Pi research-tool default effort is `low` (`src/research.ts`). Models still passed `effort: medium` or `high` on some `web_search` calls. That is recorded, not treated as a uniform low-effort run. No run was repeated. `pi-sonnet` people-board logged `database is locked` and still returned a `web_search` answer; that call was not repeated.
+Pi research-tool default effort is `low` (`src/research.ts`). Deduped tool calls still include medium and high query dispatches. That is recorded in the call table, not treated as a uniform low-effort run. No run was repeated. `pi-sonnet` people-board logged `database is locked` and still returned a `web_search` answer; that call was not repeated.
 
 ## Versions and models
 
@@ -28,7 +28,7 @@ Pi research-tool default effort is `low` (`src/research.ts`). Models still passe
 
 `pi-default` transcript models: `openai-codex/gpt-6.1-sol` (people-board, rust-current), `openai-codex/gpt-6-astra` (url-cbm, synth-litellm, fireworks), `anthropic/claude-fable-5-1` (xai-transport, portal-kde, deep-codex). The process inherited `PI_MODEL=grok-4.7`, `PI_PROVIDER=xai`, `PI_REASONING_LEVEL=high`, and `PI_OFFLINE=1`. Those variables do not explain the three transcript models. Searches still completed with `PI_OFFLINE=1`. This arm is not a settings-default comparison.
 
-Native web tools observed, not a full tool list: Claude used WebFetch and WebSearch. Grok's pane shows web search/fetch in its help (`--disable-web-search` exists) and cited fetched pages. Muse logged "Searched web" and "Fetched". Agy logged searches, page reads, and `curl`, behind one-shot command prompts. Pi extension tools used were `web_search` and, twice, `interactive_search`. The private store has no `deep_search` / `research` row.
+Native web tools observed, not a full tool list: Claude used WebFetch and WebSearch. Grok's pane shows web search/fetch in its help (`--disable-web-search` exists) and cited fetched pages. Muse logged "Searched web" and "Fetched". Agy logged searches, page reads, and `curl`, behind one-shot command prompts. On these prompts, Pi called `web_search` and, twice, `interactive_search`. The private store has zero `research` rows for these sessions. That is not a finding about whether `deep_search` is chosen in other conditions.
 
 ## Tasks
 
@@ -41,7 +41,7 @@ Native web tools observed, not a full tool list: Claude used WebFetch and WebSea
 | fireworks | pinned contract | gold Q1 |
 | xai-transport | cited synthesis | gold Q2 |
 | portal-kde | cited synthesis | gold Q7 |
-| deep-codex | deeper research | gold Q5. No arm called `deep_search` |
+| deep-codex | deeper research | gold Q5. Under these prompts and model conditions, zero `research` rows were stored |
 
 ## Results
 
@@ -76,35 +76,48 @@ These are observations from this run, not strengths of the product in general.
 
 - Grok build answered several items in the pane and cited pages. Three gold items are only partial in the saved scrollback, so the pane transcript is a weak record for long answers. Model is `grok-4.7-build-fast`, which Pi could not match.
 - Muse Code met the rubric on the saved text for 8/8, after the synth-litellm wording was reread. It stopped for a network allow on several hosts. Session allow was used; settings were not written by this run. Effort in the pane was max, not low.
-- Claude Code met the rubric on 6/8 saved texts. It used WebFetch summaries and said so. portal-kde is partial. It also ran shell commands in the user's worktree, including a scratchpad under `/tmp`.
+- Claude Code met the rubric on 7 of 8 saved texts. The other cell is portal-kde, partial. That matches `~/.cache/pi-webtasks-compare/analysis/grades-corrected.json` and a reread of the saved Claude answers. A 6/8 count does not. It used WebFetch summaries and said so. It also ran shell commands in the user's worktree, including a scratchpad under `/tmp`.
 - agy met the four early tasks. The four later tasks read the gold files in the worktree, so they are not evidence about its web tools. Command allows were one-shot; persist-to-settings was not selected.
-- Pi with an explicit model id stayed on that id. `web_search` was the research tool. No `deep_search` row was stored. pi-grok and pi-gemini also used a lot of `bash`/`read` against local files, including, in the cases above, grader files. That is a confound against "native web tool" and against isolation.
+- Pi with an explicit model id stayed on that id. On these runs the research tools that dispatched were `web_search` and two `interactive_search` calls. Zero `research` rows were stored for these sessions; that does not say `deep_search` is unused in general. pi-grok and pi-gemini also used a lot of `bash`/`read` against local files, including, in the cases above, grader files. That is a confound against "native web tool" and against isolation.
 - pi-default is not interpretable as the settings default. It also gave the one clear current-fact miss (Rust 1.98.1).
 
 ## Calls, time, and cost
 
 Wall time is `herdr agent prompt --wait` or the Pi process, not time-to-first-token. Herdr wait returned when the pane went idle, done, or blocked.
 
-| Arm | Tasks | Wall sum (s) | Median (s) | Research tool calls in the transcript |
+| Arm | Tasks | Wall sum (s) | Median (s) | Pane or local tools |
 | --- | --- | --- | --- | --- |
-| grok | 8 | 535 | 64 | not counted; pane does not emit a tool log |
-| muse | 8 | 250 | 21 | "Searched web" / "Fetched" lines in the pane; no call ledger |
+| grok | 8 | 535 | 64 | no tool ledger in the pane |
+| muse | 8 | 250 | 21 | "Searched web" / "Fetched" lines; no call ledger |
 | claude | 8 | 204 | 26 | WebFetch and WebSearch visible; no call ledger |
 | agy | 8 | 101 | 11 | searches and `curl` behind prompts; no call ledger |
-| pi-default | 8 | 404 | 47 | 18 `web_search`, 5 `read`, 29 `bash` |
-| pi-sonnet | 8 | 206 | 30 | 10 `web_search`, 2 `interactive_search`, 9 `bash` |
-| pi-grok | 8 | 655 | 66 | 46 `web_search`, 37 `read`, 72 `bash` |
-| pi-gemini | 8 | 323 | 47 | 38 `web_search`, 4 `read`, 42 `bash` |
-| pi-muse | 8 | 397 | 44 | 30 `web_search`, 9 `read`, 31 `bash` |
+| pi-default | 8 | 404 | 47 | 29 `bash`, 5 `read`, plus the research split below |
+| pi-sonnet | 8 | 206 | 30 | 9 `bash`, plus the research split below |
+| pi-grok | 8 | 655 | 66 | 72 `bash`, 37 `read`, plus the research split below |
+| pi-gemini | 8 | 323 | 47 | 42 `bash`, 4 `read`, plus the research split below |
+| pi-muse | 8 | 397 | 44 | 31 `bash`, 9 `read`, plus the research split below |
 
-Pi counts are unique `toolCall` ids in the jsonl. The private store, which is the paid-research ledger for those Pi processes, has 80 `search` rows and 62 `extract` rows, all `completed`, and 0 `research` rows. It has no failed status rows. The transcript tool counts and the store rows are not the same number; both are reported. No deep-research creation was stored, so none was repeated.
+Pi research counts are unique `toolCall` ids in `raw/pi/<arm>/*.jsonl`, joined to the private store on the Pi session id. Repeated streamed copies of the same id are not requests. An earlier histogram counted those copies and did not match the deduped calls. The table below replaces it.
 
-`web_search` effort arguments that were present: pi-grok 16 low / 32 medium / 2 high; pi-muse 12 low / 20 medium / 6 high; pi-default 4 low / 6 medium / 2 high; pi-sonnet 4 medium `web_search` plus 2 medium `interactive_search`. Calls with no effort argument use the extension default, `low`.
+Store rows for these session ids: 80 completed `search`, 62 completed `extract`, 2 completed `conversations`, 0 `research`, 0 failed status rows, 0 store sessions outside these Pi runs. Query-search calls equal `search` rows per arm. URL-read calls equal `extract` rows. The two `interactive_search` calls equal the two conversation rows. No entity lookup was in the tool calls or the store. No call carried `effort` together with `urls` or `entity`, so none was rejected before dispatch on that rule.
+
+| Arm | Query low/fast | No effort given (default low/fast) | Query medium/basic | Query high/advanced | URL reads (extract) | Entity lookups | Rejected before dispatch | Interactive |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| pi-default | 2 | 0 | 3 | 1 | 12 | 0 | 0 | 0 |
+| pi-sonnet | 0 | 2 | 2 | 0 | 6 | 0 | 0 | 2 medium |
+| pi-grok | 8 | 2 | 16 | 1 | 19 | 0 | 0 | 0 |
+| pi-gemini | 0 | 24 | 0 | 0 | 14 | 0 | 0 | 0 |
+| pi-muse | 6 | 0 | 10 | 3 | 11 | 0 | 0 | 0 |
+| Total | 16 | 28 | 31 | 5 | 62 | 0 | 0 | 2 medium |
+
+Those 80 query calls are the 80 completed search rows. The 62 URL reads are the 62 completed extract rows. Medium and high query calls, and the two medium interactive calls, are an execution deviation from the low-effort brief. They are not rewritten as low. Omitted effort is the extension default, low, not a tier column in the store. Store artifacts record `sku_search` or `sku_extract_excerpts` and do not record the search tier. The tier split is the deduped tool-call argument.
+
+For these prompts, tasks, and model conditions, `deep_search` was not among the deduped tool calls, and the `research` table has zero rows. That is all this run shows.
 
 Costs, kept separate:
 
 - Model token costs are visible only in the Pi jsonl `usage.cost.total` fields. Summing distinct assistant usage objects gives about $3.69 pi-default, $3.44 pi-grok, $0.44 pi-gemini, $0.36 pi-sonnet, $0.04 pi-muse. These are transcript estimates, not an invoice. The pi-default sum is dominated by `claude-fable-5-1` turns.
-- Research-call charges were not read from an account balance. Using `bench/prices.lock.json` (snapshot 2026-09-20, not a live quote): extract $0.001; search fast $0.001; search basic/advanced $0.005. 62 extracts are about $0.062. 80 searches are about $0.080 if all fast, or about $0.400 if all basic/advanced. The transcripts show mixed effort, so the fast-only figure is not established. Range about $0.14 to $0.46 for those store rows, plus an unknown charge for 2 `interactive_search` calls that are not in the `research` table. This is not a billed total.
+- Research-call charges were not read from an account balance. Using `bench/prices.lock.json` (snapshot 2026-09-20, not a live quote) on the reconciled tiers: 44 fast searches (16 explicit low plus 28 omitted-effort) at $0.001 = $0.044; 31 basic at $0.005 = $0.155; 5 advanced at $0.005 = $0.025. Query-search estimate $0.224. The two interactive calls used `effort: medium`; the same snapshot prices Responses medium at $0.05, so $0.100, from the tool argument rather than a store tier column. Extract is $0.001 per URL in that snapshot. The 62 extract dispatches list 112 URLs in the tool arguments and 110 `sku_extract_excerpts` counts in the artifacts. The gap is pi-default only (20 URL arguments, 18 SKU counts). Extract estimate $0.110 to $0.112. Combined research estimate about $0.434 to $0.436. Not an invoice, and not a uniform low-effort bill.
 - Grok's session `usage.json` has `costUsdTicks` 109811990800 for `grok-4.7-build-fast` over 9 turns and 70 model calls. The tick-to-dollar unit is not in that file, so no USD figure is stated. Claude's pane shows cumulative token counts (about 213k to 259k across the session) and no price. Muse and agy charges were not visible. Those are unobservable, not zero.
 
 ## Confounds
@@ -113,7 +126,7 @@ Costs, kept separate:
 - One run each. Eight tasks. A miss or a pass is not a rate.
 - Herdr panes kept context across tasks. Pi started a new process per task. Later herdr answers can use earlier tool results. Later agy answers also found the gold files in the worktree cwd.
 - Grok and some herdr captures are scrollback-limited. A partial there means the saved text, not a proven wrong answer.
-- Claude, Muse, and agy were not low-effort panes. Pi thinking levels matched the other CLI where a model id matched, except the missing grok fast variant. Research-tool effort was not uniformly low.
+- Claude, Muse, and agy were not low-effort panes. Pi thinking levels matched the other CLI where a model id matched, except the missing grok fast variant. On the deduped query calls, 31 were medium/basic and 5 were high/advanced, plus 2 medium interactive calls. That is an execution deviation from the low-effort brief.
 - Local `bash`/`read` let Pi and agy open grader files. That is misuse relative to a web-only comparison, and it happened.
 - `r2-grade.ts` did not grade these freeform answers. Citation checks are spot checks, not entailment.
 
@@ -126,4 +139,5 @@ Costs, kept separate:
 - Blind grading sheet: `~/.cache/pi-webtasks-compare/analysis/grades-blind.json`
 - Corrections after reading answers: `~/.cache/pi-webtasks-compare/analysis/grades-corrected.json`
 - Citation fetches: `~/.cache/pi-webtasks-compare/analysis/citations.json` and `cited-pages/`
+- Call and effort reconciliation: `~/.cache/pi-webtasks-compare/analysis/call-reconciliation.json`
 - This file: `docs/cli-comparison.md`

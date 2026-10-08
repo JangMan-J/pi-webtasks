@@ -8,6 +8,7 @@ Manager fast-forwarded `master` to `e086691` after independently reviewing and v
 Later user decision removed `/webtasks`; Manager reviewed, verified, and fast-forwarded `master` to `0a282c1`.
 Latest wording change is integrated through `7f561f3`, plus Manager cleanup of monetary wording in result/error safety messages.
 Native Parallel provider login is integrated through `36f8423`.
+The API Keys link correction is integrated through `5e81012`; the correct tab is plural, `api-keys`.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
@@ -56,7 +57,7 @@ Do not restart completed acceptance runs or the running comparison.
 - `deep_search` locates hard-to-find facts and produces detailed reports, including when ordinary search fails or the user is dissatisfied.
 - `web_search` guidance directs models to deep research after a few unsuccessful searches instead of repeated searching.
 - No-resubmit safety messages remain, with monetary wording removed.
-- Latest requested feature: API-key entry through Pi's own `/login`, opening/showing `https://platform.parallel.ai/settings?tab=api-key` and using native auth storage.
+- Latest requested feature: API-key entry through Pi's own `/login`, opening/showing `https://platform.parallel.ai/settings?tab=api-keys` and using native auth storage.
   This does not restore extension commands or OAuth.
   User subsequently chose Pi's existing provider login behavior, superseding the masked-entry requirement.
   Implement through native provider registration and auth storage; no custom masking, extra commands, dummy models, or Pi runtime UI changes.
@@ -80,7 +81,7 @@ Model costs, research-price estimates, and actual observable charges must be rep
 - Private SQLite store is created automatically at `~/.pi/agent/webtasks/webtasks.sqlite`, unless `WEBTASKS_DIR` overrides it.
 - Parallel registers as a native API-key provider with zero models, no OAuth, and no extension commands.
   Use native `/login`, "Sign in with an API key", then Parallel; environment/key-file fallbacks remain.
-  Key management link: `https://platform.parallel.ai/settings?tab=api-key`.
+  Key management link: `https://platform.parallel.ai/settings?tab=api-keys`.
   Pi stores the key in its native `auth.json`; no custom account-file reader is restored.
   Stored key is resolved on every request, so mid-session login/logout does not retain a module-level client/key cache.
 - Collector opens a group event stream from its saved cursor, takes a group-runs snapshot, then consumes events.
@@ -120,6 +121,7 @@ Important branch commits:
 | `0a282c1` | Remove commands/account integration; retry failed result GETs once per owning-session start |
 | `7f561f3` | Remove tool-price guidance; reposition deep research |
 | `36f8423` | Native Parallel API-key provider login, no models, per-call credential resolution |
+| `5e81012` | Correct dashboard link to `settings?tab=api-keys` |
 
 Manager reruns at `55a0915`: typecheck passed; tests 169/169; `check:all` exit 0, bench 84/84, curate 361 checks.
 Manager reruns at `3450752`: typecheck passed; tests 166/166.
@@ -137,6 +139,8 @@ Manager rerun at `36f8423`: `check:all` exit 0, main 183/183, bench 84/84, curat
 Provider tests cover registration, prompt ordering, empty/cancelled input, stored-key tool use, login/logout during a session, and key secrecy in outputs/artifacts.
 Installed Pi 1.1.0 scripted-PTY test in an isolated profile confirmed Parallel listed in `/login` and synthetic credentials saved under `parallel`.
 Evidence index: `~/.cache/pi-webtasks-login-evidence/EMPIRICAL.md`.
+Manager reran the login-link test at `5e81012`: one selected test passed.
+Lead reports full `check:all` passed at that revision; browser navigation to the corrected page has not been rerun by Manager.
 Earlier failures were a test executing before session startup and a stale bench path; both were fixed.
 
 ## Live findings
@@ -216,5 +220,5 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   Other CLIs' charges are unknown.
   Raw artifacts: `~/.cache/pi-webtasks-compare/`; grades: `analysis/grades-corrected.json`; counts: `analysis/call-reconciliation.json`.
   Do not infer an overall ranking or repeat paid trials to repair these reporting issues.
-- `master` includes the accepted implementation through `36f8423`.
+- `master` includes the accepted implementation through `5e81012`.
   No production install, publication, login migration, or receiver deployment has been completed by this Manager.

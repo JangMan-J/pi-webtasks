@@ -9,11 +9,13 @@ Later user decision removed `/webtasks`; Manager reviewed, verified, and fast-fo
 Latest wording change is integrated through `7f561f3`, plus Manager cleanup of monetary wording in result/error safety messages.
 Native Parallel provider login is integrated through `36f8423`.
 The API Keys link correction is integrated through `5e81012`; the correct tab is plural, `api-keys`.
+User confirmed the link works, then identified `https://docs.parallel.ai/integrations/account-api` as the correct login surface.
+Lead owns a read-only OAuth design investigation; no OAuth implementation or live authentication is authorized by that investigation alone.
 No installation or publication occurred.
 The backoff and SSE cleanup fixes are committed and verified offline.
 
 1. Implementation and corrected CLI report are integrated.
-2. Native `/login` is integrated; the existing running Pi process needs `/reload` or restart to load it.
+2. Review the Lead's read-only Account API OAuth findings before any implementation; API-key fallback remains.
 3. Keep model-navigation failures visible; avoid repeating paid research unnecessarily.
 4. Treat installation/publication and optional receiver deployment as separate work.
 5. If source changes after this handoff, rerun proportionate checks before further integration.
@@ -31,6 +33,7 @@ The primary checkout now contains the accepted implementation.
 - SSE implementation assignment is resolved and integrated.
 - CLI comparison and corrections are resolved as `result:cli-compare#1` and `result:cli-compare#2`.
 - Native `/login` assignment is resolved and integrated at `36f8423`, following `result:login-finish#1`.
+- Lead's `account-api` assignment researches official OAuth/device flow, previously removed account helpers, and installed Pi's native OAuth interface.
 - Revalidate supervision state before process inspection or stopping work.
 - The other paused project, `herdsman/work-6f4f7c3d`, is outside this assignment.
 
@@ -199,6 +202,11 @@ Other follow-up conclusions rely on the Lead's report and committed acceptance r
   A human login with real credentials has not been exercised.
   Fixing Pi's prompt or post-login message is outside this scope.
   Manager verified existing settings load this primary checkout; no settings change or separate install is needed, just reload/restart.
+- OAuth design is pending: distinguish Account API OAuth tokens from research API keys and verify which credentials each endpoint accepts.
+  Determine minimum scopes and whether research access requires reading/selecting or creating a separate app/key.
+  The old account helper requested broad mutation scopes, including `balance:add`; those must not become defaults without justification.
+  Research is read-only: no live auth calls, real credential writes, account mutations, key/app creation, credit operations, or paid runs.
+  Lead must supply official contract evidence and concrete design choices before implementation.
 - The Manager observed the old `~/.pi/agent/parallelized/webhooks/webhooks.sqlite`: 28 events, 57 registrations, 55 done and 2 pending.
   Preserve that file; leave it unread by the new implementation as requested.
 - Optional receiver/offline-owner behavior is not live-verified; it requires a separate authorized deployment.

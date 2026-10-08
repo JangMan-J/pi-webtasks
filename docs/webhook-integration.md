@@ -124,6 +124,9 @@ When a closed session resumes, it receives its pending notification.
 
 SQLite transactions enforce duplicate detection by `webhook-id` and protect resource ownership.
 Handled duplicate records remain for at least 72 hours, beyond the documented 48-hour retry horizon.
+Pruning removes only handled and notified entries after 72 hours; unmatched callbacks and unacknowledged notifications remain retained.
+A run reported by both a callback and the outbound stream is notified once per reported status. Once a notice is acknowledged, a later entry for the same run and status is acknowledged without a second notice. A completion after `action_required` is a separate notice.
+Two processes can still fetch the same result concurrently. That fetch is an idempotent read and can add at most one extra artifact; no paid request repeats.
 Invalid signatures, malformed secrets, invalid UTF-8, and oversized requests cannot enter the authenticated inbox.
 
 Result retrieval and notification are not an atomic transaction with the external service or Pi.

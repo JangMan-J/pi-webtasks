@@ -248,6 +248,18 @@ const PROVIDER_ID_KEYS = new Set(["session_id", "search_id", "extract_id", "enti
 const MAX_ACTIVITY_QUERY = 500;
 const MAX_PROVIDER_ID = 1000;
 
+function recordOf(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+}
+
+/** Reported task-run status of a stored event (signed callback or outbound synthetic). */
+export function reportedRunStatus(event: unknown): string | undefined {
+  const data = recordOf(recordOf(event).data);
+  const run = recordOf(data.run);
+  const pick = (v: unknown) => typeof v === "string" && v ? v : undefined;
+  return pick(data.status) ?? pick(run.status);
+}
+
 export function isTerminalResearch(status: string): boolean {
   return FROZEN_RESEARCH.has(status as ResearchStatus);
 }
@@ -460,6 +472,17 @@ export class WebhookInbox {
       )
     `);
     db.exec("CREATE INDEX IF NOT EXISTS events_handled ON events(handled)");
+    // One row per run and reported status, written only when a notification is acknowledged after
+    // delivery. It is the persistent guard against a second notice for the same outcome.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS run_notifications (
+        resource_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_id TEXT NOT NULL,
+        notified_at INTEGER NOT NULL,
+        PRIMARY KEY (resource_id, status)
+      )
+    `);
     const eventCols = (db.prepare("PRAGMA table_info(events)").all() as { name: string }[]).map(c => c.name);
     if (!eventCols.includes("fetch_failed")) {
       db.exec("ALTER TABLE events ADD COLUMN fetch_failed INTEGER NOT NULL DEFAULT 0");
@@ -766,6 +789,29 @@ export class WebhookInbox {
   async markNotified(webhook_id: string): Promise<void> {
     await this.init();
     this.stmts.markNotified!.run(webhook_id);
+  }
+
+  /**
+   * Acknowledges a notification that was actually delivered to the owning session. For a task entry this
+   * also records (run, reported status) so later entries with the same outcome are not announced again.
+   */
+  async acknowledgeDelivery(webhook_id: string): Promise<void> {
+    await this.init();
+    this.tx(() => {
+      const row = this.stmts.getEvent!.get(webhook_id) as EventRow | undefined;
+      this.stmts.markNotified!.run(webhook_id);
+      if (!row || row.kind !== "task" || !row.resource_id) return;
+      const status = reportedRunStatus(JSON.parse(row.event_json));
+      if (!status) return;
+      this.db!.prepare("INSERT OR IGNORE INTO run_notifications (resource_id, status, webhook_id, notified_at) VALUES (?, ?, ?, ?)")
+        .run(row.resource_id, status, webhook_id, Date.now());
+    });
+  }
+
+  /** True once a notification for this run and reported status has been acknowledged. */
+  async isRunStatusNotified(resource_id: string, status: string): Promise<boolean> {
+    await this.init();
+    return !!this.db!.prepare("SELECT 1 FROM run_notifications WHERE resource_id = ? AND status = ?").get(resource_id, status);
   }
 
   /** Fetched/recorded entries awaiting delivery to their owning session. */

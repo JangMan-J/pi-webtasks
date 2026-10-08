@@ -85,8 +85,9 @@ export default function piWebtasks(pi: ExtensionAPI) {
 
   async function deliverWebhookNotification(ctx: ExtensionContext, d: Delivery, owner: Runtime): Promise<void> {
     // Only the runtime that started this pass may notify, and it must still be current
-    // both now and after the lookup below. Otherwise leave the delivery unacknowledged.
-    const current = () => rt === owner && !owner.released && ctx.sessionManager.getSessionId() === owner.sessionId;
+    // both now and after the lookup below. A stopping runtime never notifies. Otherwise leave the
+    // delivery unacknowledged for the next runtime of this session.
+    const current = () => rt === owner && !owner.released && !owner.session.stopped && ctx.sessionManager.getSessionId() === owner.sessionId;
     if (!current()) return;
     const record = await owner.inbox?.researchForRun(d.resource_id).catch(() => undefined);
     if (!current()) return;
@@ -111,7 +112,8 @@ export default function piWebtasks(pi: ExtensionAPI) {
 
   async function webhookRecoveryPass(ctx: ExtensionContext, retryFailed = false): Promise<{ processed: number; delivered: number }> {
     const owner = rt;
-    if (!owner?.consumer) return { processed: 0, delivered: 0 };
+    // No new pass once stopping has begun: the outgoing runtime finishes what it already holds.
+    if (!owner?.consumer || owner.released || owner.session.stopped) return { processed: 0, delivered: 0 };
     const { processed, deliveries } = await owner.consumer.recover({ retryFailed });
     for (const delivery of deliveries) await deliverWebhookNotification(ctx, delivery, owner);
     return { processed, delivered: deliveries.length };

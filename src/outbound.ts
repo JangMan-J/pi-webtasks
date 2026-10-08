@@ -1,16 +1,16 @@
 // Outbound completion for one Pi session. While the runtime is live, the owning session follows its own
-// Task Group's event stream and records each non-active run as a synthetic entry in the existing inbox
-// events table. The shared processing path then fetches the result once, saves the artifact, and
-// notifies only the owning session. Nothing runs when Pi is closed: there is no daemon.
+// Task Group's event stream and records each settled run as a synthetic entry in the existing inbox
+// events table. The shared processing path then fetches the result and notifies only the owning session.
+// Nothing runs when Pi is closed: there is no daemon.
 //
-// Each pass opens the event stream from the stored cursor first, then takes a snapshot of the group's
-// runs. Any transition is therefore either in the snapshot or in the stream, and the snapshot is the
-// fallback whenever streaming fails. Entry IDs are deterministic, so replays and snapshot repeats are
-// ignored. The cursor moves only in the same transaction that records the events it covers.
+// Each pass opens the event stream from the stored cursor, then takes a snapshot of the group's runs,
+// then consumes the stream. A transition is therefore either in the snapshot or in the stream, and the
+// snapshot is the fallback whenever streaming fails. Entry IDs are deterministic, so replays and snapshot
+// repeats are ignored. The cursor moves only in the same transaction that records the events it covers.
 //
-// The SDK's request timeout covers only the time until response headers arrive (verified in
-// node_modules/parallel-web/client.js fetchWithTimeout, whose timer is cleared once fetch resolves).
-// The SSE body is bounded by the server's one-hour window and by abort, not by that timeout.
+// Two client-side deadlines bound wall-clock time, because the SDK timeout covers only the time until
+// response headers arrive (node_modules/parallel-web/client.js fetchWithTimeout clears its timer once fetch
+// resolves): one per events connection (10 minutes), and one per snapshot covering open and body (60 s).
 
 import type Parallel from "parallel-web";
 import { setTimeout as delay } from "node:timers/promises";
@@ -18,22 +18,27 @@ import { formatError } from "./ops.ts";
 import type { ResearchSession } from "./research.ts";
 import type { ResearchRecord } from "./research-types.ts";
 
-/** Shared backoff for stream errors and quiet EOFs. Values are milliseconds. */
+/** Shared backoff and deadlines. Values are milliseconds. */
 export const OUTBOUND_BACKOFF = {
   baseMs: 5_000,
   capMs: 300_000,
   /** Upper bound for a server Retry-After hint on 429 or 503. */
   retryAfterCapMs: 900_000,
-  /** A stream that stayed open this long counts as healthy even without run events. */
+  /** A connection that stayed open this long, measured from a successful open, counts as healthy. */
   healthyLifeMs: 60_000,
-  /** Pause after a healthy EOF before reconnecting. */
+  /** Pause after a healthy end of stream before the next pass. */
   healthyEofMs: 1_000,
+  /** Wall-clock bound on one events connection, open and body. Expiry is a healthy end. */
+  connectionMs: 600_000,
+  /** Wall-clock bound on one snapshot, open and body. Expiry is a failure. */
+  snapshotMs: 60_000,
 } as const;
 
 /** SDK timeout for the events and snapshot requests. It bounds time to headers only. */
 const REQUEST_TIMEOUT_MS = 60_000;
 const RECORDED = new Set(["completed", "failed", "cancelled", "action_required"]);
 const SETTLED = new Set(["completed", "failed", "cancelled"]);
+const WATCHED = new Set(["pending", "action_required"]);
 const TASK_EVENT = "task_run.status";
 
 type RunLike = {
@@ -53,9 +58,40 @@ export type OutboundOptions = {
   onLog?: (msg: string) => void;
   /** Dispatch records older than this cannot be in flight in this runtime. Default: construction time. */
   startedAt?: number;
+  /** Overrides for OUTBOUND_BACKOFF deadlines (tests). */
+  deadlines?: Partial<Pick<typeof OUTBOUND_BACKOFF, "connectionMs" | "snapshotMs">>;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   random?: () => number;
 };
+
+/** Both requests of one pass can fail; each cause keeps its own Retry-After hint. */
+class PassFailure extends Error {
+  readonly causes: unknown[];
+  constructor(causes: unknown[]) {
+    super(causes.map(c => formatError(c)).join("; ").slice(0, 300));
+    this.causes = causes;
+  }
+}
+
+type Deadline = { signal: AbortSignal; expired: () => boolean; clear: () => void };
+
+/** A signal that aborts when the parent aborts or after `ms`, and records which of the two happened. */
+function deadlineFor(parent: AbortSignal, ms: number): Deadline {
+  const own = new AbortController();
+  let fired = false;
+  const timer = setTimeout(() => { fired = true; own.abort(new Error("deadline exceeded")); }, ms);
+  const forward = () => own.abort(parent.reason);
+  if (parent.aborted) forward();
+  else parent.addEventListener("abort", forward, { once: true });
+  return {
+    signal: own.signal,
+    expired: () => fired,
+    clear: () => {
+      clearTimeout(timer);
+      parent.removeEventListener("abort", forward);
+    },
+  };
+}
 
 export function outboundEntryId(runId: string, status: string): string {
   return `outbound:${runId}:${status}`;
@@ -105,6 +141,7 @@ export class OutboundCollector {
   private readonly onRecorded: () => void;
   private readonly onLog: (msg: string) => void;
   private readonly startedAt: number;
+  private readonly deadlines: { connectionMs: number; snapshotMs: number };
   private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   private readonly random: () => number;
   private readonly abort = new AbortController();
@@ -122,11 +159,12 @@ export class OutboundCollector {
     this.onRecorded = options.onRecorded ?? (() => {});
     this.onLog = options.onLog ?? (() => {});
     this.startedAt = options.startedAt ?? Date.now();
+    this.deadlines = { connectionMs: options.deadlines?.connectionMs ?? OUTBOUND_BACKOFF.connectionMs, snapshotMs: options.deadlines?.snapshotMs ?? OUTBOUND_BACKOFF.snapshotMs };
     this.sleep = options.sleep ?? defaultSleep;
     this.random = options.random ?? Math.random;
   }
 
-  /** Idempotent. Work starts only when a pending or unbound record exists for the session's group. */
+  /** Idempotent. Work starts only when a pending, action-required, or unbound record exists for the session's group. */
   start(): void {
     if (this.loop || this.stopped) return;
     this.loop = this.run();
@@ -157,31 +195,34 @@ export class OutboundCollector {
         const pass = await this.pass();
         if (this.stopped) break;
         if (pass === "idle") continue;
-        if (pass.runEvents > 0 || pass.lifeMs >= OUTBOUND_BACKOFF.healthyLifeMs) {
+        if (pass.healthy) {
           this.failures = 0;
           this.reported = false;
           wait = OUTBOUND_BACKOFF.healthyEofMs;
         } else {
-          wait = this.failed();
+          wait = this.failed([]);
         }
       } catch (err) {
         if (this.stopped) break;
-        wait = this.failed(err);
+        wait = this.failed(err instanceof PassFailure ? err.causes : [err]);
       }
       await this.sleep(wait, this.abort.signal);
     }
   }
 
-  /** Exponential backoff with jitter (75–100% of the step), honoring Retry-After and capped. */
-  private failed(err?: unknown): number {
+  /**
+   * Exponential backoff with jitter (75–100% of the step). The largest Retry-After hint among the
+   * causes raises the wait, capped at retryAfterCapMs.
+   */
+  private failed(causes: unknown[]): number {
     this.failures++;
     const step = Math.min(OUTBOUND_BACKOFF.capMs, OUTBOUND_BACKOFF.baseMs * 2 ** (this.failures - 1));
     let wait = step * (0.75 + 0.25 * this.random());
-    const hint = retryAfterMs(err);
-    if (hint !== undefined) wait = Math.max(wait, Math.min(hint, OUTBOUND_BACKOFF.retryAfterCapMs));
-    if (err !== undefined && !this.reported) {
+    const hints = causes.map(retryAfterMs).filter((hint): hint is number => hint !== undefined);
+    if (hints.length) wait = Math.max(wait, Math.min(Math.max(...hints), OUTBOUND_BACKOFF.retryAfterCapMs));
+    if (causes.length && !this.reported) {
       this.reported = true;
-      this.onLog(`Research completion stream unavailable; retrying in the background: ${formatError(err).slice(0, 300)}`);
+      this.onLog(`Research completion stream unavailable; retrying in the background: ${formatError(new PassFailure(causes)).slice(0, 300)}`);
     }
     return Math.round(wait);
   }
@@ -211,82 +252,111 @@ export class OutboundCollector {
     return `${record.reference}:${record.status}`;
   }
 
-  /** A pending run, or an unbound uncertain submission that no snapshot has covered yet. */
+  /** A bound pending or action-required run, or an unbound uncertain submission no snapshot has covered yet. */
   private async hasWork(): Promise<boolean> {
     const group = this.session.group;
     if (!group || this.stopped || this.session.stopped) return false;
     const store = await this.session.config.getStore();
     for (const record of await store.listResearchForSession(this.session.sessionId)) {
       if (record.group_id !== group) continue;
-      if (record.run_id && record.status === "pending") return true;
+      if (record.run_id && WATCHED.has(record.status)) return true;
       if (this.candidate(record) && !this.tried.has(this.trackKey(record))) return true;
     }
     return false;
   }
 
-  private async pass(): Promise<"idle" | { runEvents: number; lifeMs: number }> {
+  /**
+   * One pass: open the events stream from the stored cursor, take the snapshot, then consume the stream.
+   * Failures from the open and from the snapshot are both reported, so both Retry-After hints count.
+   */
+  private async pass(): Promise<"idle" | { healthy: boolean }> {
     const group = this.session.group!;
     const store = await this.session.config.getStore();
     const client = await this.session.config.getClient();
-    const iteration = new AbortController();
-    const signal = AbortSignal.any([this.abort.signal, iteration.signal]);
-    const started = Date.now();
+    const connection = deadlineFor(this.abort.signal, this.deadlines.connectionMs);
     try {
       const resumeFrom = (await store.getSessionGroup(this.session.sessionId))?.event_cursor;
-      // Open the stream before the snapshot, so a transition is in one or the other. A failed open
-      // does not skip the snapshot, which is the polling fallback.
       let stream: AsyncIterable<unknown> | undefined;
       let openError: unknown;
+      let openedAt = 0;
       try {
-        stream = await client.taskGroup.events(group, { last_event_id: resumeFrom ?? undefined }, { maxRetries: 0, timeout: REQUEST_TIMEOUT_MS, signal });
+        stream = await client.taskGroup.events(group, { last_event_id: resumeFrom ?? undefined }, { maxRetries: 0, timeout: REQUEST_TIMEOUT_MS, signal: connection.signal });
+        openedAt = Date.now(); // the healthy-lifetime clock starts only once the stream is open
       } catch (err) {
         openError = err;
       }
-      await this.reconcile(client, group, signal);
-      if (this.stopped || !(await this.hasWork())) return "idle";
-      if (openError !== undefined) throw openError;
-      let runEvents = 0;
-      for await (const raw of stream!) {
-        if (this.stopped) break;
-        const event = raw as { type?: string; event_id?: string | null; run?: RunLike; error?: { message?: string } };
-        if (event.type === "error") throw new Error(`Task group event stream error: ${event.error?.message ?? "unknown"}`);
-        if (event.type === "task_group_status") {
-          if (typeof event.event_id === "string") await store.recordOutbound({ session_id: this.session.sessionId, cursor: event.event_id });
-          continue;
-        }
-        if (event.type !== "task_run.state" || !event.run) continue;
-        runEvents++;
-        const entry = await this.observe(event.run, group);
-        const eventCursor = typeof event.event_id === "string" && event.event_id ? event.event_id : undefined;
-        const inserted = await store.recordOutbound({
-          session_id: this.session.sessionId,
-          ...(entry ? { events: [entry] } : {}),
-          ...(eventCursor !== undefined ? { cursor: eventCursor } : {}),
-        });
-        if (inserted) this.onRecorded();
+      // A failed open does not skip the snapshot, which is the polling fallback.
+      let snapshotError: unknown;
+      try {
+        await this.reconcile(client, group);
+      } catch (err) {
+        snapshotError = err;
       }
-      return { runEvents, lifeMs: Date.now() - started };
+      if (this.stopped) return "idle";
+      if (snapshotError === undefined && !(await this.hasWork())) return "idle";
+      const causes = [openError, snapshotError].filter(cause => cause !== undefined);
+      if (causes.length) throw new PassFailure(causes);
+
+      let runEvents = 0;
+      try {
+        for await (const raw of stream!) {
+          if (this.stopped) break;
+          const event = raw as { type?: string; event_id?: string | null; run?: RunLike; error?: { message?: string } };
+          if (event.type === "error") throw new Error(`Task group event stream error: ${event.error?.message ?? "unknown"}`);
+          if (event.type === "task_group_status") {
+            if (typeof event.event_id === "string") await store.recordOutbound({ session_id: this.session.sessionId, cursor: event.event_id });
+            continue;
+          }
+          if (event.type !== "task_run.state" || !event.run) continue;
+          runEvents++;
+          const entry = await this.observe(event.run, group);
+          const eventCursor = typeof event.event_id === "string" && event.event_id ? event.event_id : undefined;
+          if (!entry && eventCursor === undefined) continue;
+          const inserted = await store.recordOutbound({
+            session_id: this.session.sessionId,
+            ...(entry ? { events: [entry] } : {}),
+            ...(eventCursor !== undefined ? { cursor: eventCursor } : {}),
+          });
+          if (inserted) this.onRecorded();
+        }
+      } catch (err) {
+        // Our own connection deadline ends the body abruptly; that is a healthy end, not an error.
+        if (!connection.expired() || this.stopped) throw err;
+      }
+      if (this.stopped) return "idle";
+      const lifeMs = Date.now() - openedAt;
+      return { healthy: runEvents > 0 || lifeMs >= OUTBOUND_BACKOFF.healthyLifeMs || connection.expired() };
     } finally {
-      iteration.abort(); // releases the HTTP stream on every exit path
+      connection.clear(); // releases the HTTP stream on every exit path
     }
   }
 
-  /** Snapshot of all runs in the group. Records settled runs of this session; never moves the cursor. */
-  private async reconcile(client: Parallel, group: string, signal: AbortSignal): Promise<void> {
+  /** Snapshot of all runs in the group, under its own deadline. Records settled runs of this session; never moves the cursor. */
+  private async reconcile(client: Parallel, group: string): Promise<void> {
     const store = await this.session.config.getStore();
     const covered = (await store.listResearchForSession(this.session.sessionId)).filter(r => r.group_id === group && this.candidate(r)).map(r => this.trackKey(r));
-    const snapshot = await client.taskGroup.getRuns(group, {}, { maxRetries: 0, timeout: REQUEST_TIMEOUT_MS, signal });
-    let recorded = 0;
-    for await (const raw of snapshot) {
-      if (this.stopped) return;
-      const item = raw as { type?: string; error?: { message?: string }; run?: RunLike };
-      if (item.type === "error") throw new Error(`Task group snapshot error: ${item.error?.message ?? "unknown"}`);
-      if (!item.run) continue;
-      const entry = await this.observe(item.run, group);
-      if (entry && (await store.recordOutbound({ session_id: this.session.sessionId, events: [entry] }))) recorded++;
+    const snap = deadlineFor(this.abort.signal, this.deadlines.snapshotMs);
+    try {
+      const snapshot = await client.taskGroup.getRuns(group, {}, { maxRetries: 0, timeout: REQUEST_TIMEOUT_MS, signal: snap.signal });
+      let recorded = 0;
+      for await (const raw of snapshot) {
+        if (this.stopped) return;
+        const item = raw as { type?: string; error?: { message?: string }; run?: RunLike };
+        if (item.type === "error") throw new Error(`Task group snapshot error: ${item.error?.message ?? "unknown"}`);
+        if (!item.run) continue;
+        const entry = await this.observe(item.run, group);
+        if (entry && (await store.recordOutbound({ session_id: this.session.sessionId, events: [entry] }))) recorded++;
+      }
+      // A body cut short by the deadline ends without an error; it must not count as a complete snapshot.
+      if (snap.expired()) throw new Error("Task group snapshot timed out");
+      for (const key of covered) this.tried.add(key);
+      if (recorded) this.onRecorded();
+    } catch (err) {
+      if (snap.expired() && !this.stopped) throw new Error("Task group snapshot timed out", { cause: err });
+      throw err;
+    } finally {
+      snap.clear();
     }
-    for (const key of covered) this.tried.add(key);
-    if (recorded) this.onRecorded();
   }
 
   /** Returns the synthetic entry for a settled run of this session that is not yet settled locally. */

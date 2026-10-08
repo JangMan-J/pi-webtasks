@@ -5,7 +5,7 @@ Installation, publication, and changes to the running receiver remain separate.
 Outbound completion and existing SQLite persistence are the design direction.
 Latest user decision ("switch us over") supersedes the earlier webhook-first decision.
 `deep_search` completes through outbound Task Group SSE with bounded background polling fallback, and mandatory webhooks are removed.
-This is implemented-in-progress on branch `feature/outbound-completion`.
+This is implemented on branch `feature/outbound-completion`; live acceptance is pending.
 Live provider SSE and real model navigation are not verified. Only offline tests with fake clients exist.
 
 ## 1. Target and scope
@@ -50,9 +50,10 @@ Do not start further paid work without implementation authorization or another e
 
 ## 3. What exists, and what does not
 
-This checkout has no commits and still identifies itself as `pi-parallelized`.
-Its `src/index.ts` matches that file at the other checkout's committed baseline, `f8da751`.
-It registers the original low-level tools, not either replacement interface.
+Historical baseline context, describing the checkout before this branch (not the current state):
+this checkout had no commits and still identified itself as `pi-parallelized`.
+Its `src/index.ts` matched that file at the other checkout's committed baseline, `f8da751`.
+It registered the original low-level tools, not either replacement interface.
 
 The other checkout contains a different, uncommitted state:
 
@@ -214,7 +215,7 @@ The old runtime-lifetime closure contract is superseded by the start/stop hook d
 2. Hydrate the per-session runtime group ID if a saved group exists.
 3. Attach the session's local inbox consumer and deliver saved, undelivered outcomes.
 
-Startup is lookup-only. Do not create a group or insert a session row for a fresh session.
+Startup is lookup-only for groups: it never creates a group and sends no request. It records one local metadata row per started session (ID, working directory, artifact directory) in the existing store.
 
 ### First deep submission
 
@@ -318,11 +319,10 @@ The documented maximum stream duration is one hour.
 
 ```text
 Submit run (per-run webhook only if optionally configured)
-  -> reconcile with group runs snapshot (getRuns, no outputs)
-  -> bind uncertain or dispatching submissions whose run metadata matches
-  -> durably record non-active runs
-  -> open group events stream from the stored last_event_id
-  -> record each terminal or non-active run state, then advance the cursor
+  -> open group events stream from the stored last_event_id (10-minute connection bound)
+  -> reconcile with group runs snapshot (getRuns, no outputs; 60-second bound)
+  -> bind uncertain submissions whose run metadata matches; record settled runs
+  -> consume the events: record each settled run state, then advance the cursor
   -> existing inbox pipeline claims the event and fetches the result once
   -> save evidence, record outcome
   -> notify the owning session, or retain the notification for resume
@@ -331,30 +331,31 @@ Submit run (per-run webhook only if optionally configured)
 Rules:
 
 - The collector runs inside the owning Pi session's runtime. There is no new daemon.
-- A snapshot binds an uncertain or dispatching submission only when its run metadata (`webtasks_ref`, session, group) matches. It never rebinds an accepted run and never resubmits.
+- A snapshot binds an uncertain submission only when its run metadata (`webtasks_ref`, session, group) matches. It binds a dispatching submission only when that record was created before this runtime started, so a dispatch in flight in this runtime is never bound by the collector. Binding never rebinds an accepted run and never resubmits.
 - Each completed, failed, cancelled, or action-required run state is recorded in the existing SQLite events table under the deterministic id `outbound:<run_id>:<status>`.
 - The cursor advances in the same transaction, only after durable recording.
 - `task_group_status` events only advance the cursor.
-- The `event_cursor` returned by group additions seeds the cursor only when none is stored. It never jumps past older pending jobs. `run_cursor` is not used for events.
-- Backoff is bounded: base 5 seconds, doubling, cap 300 seconds, jittered.
-- A stream error, an `error` event, or end of stream without run events triggers backoff, so an inactive group's immediate end of stream does not busy-loop.
-- `retry-after` and `retry-after-ms` are honored on 429 and 503, capped at 15 minutes.
+- The `event_cursor` returned by group additions seeds the cursor only when none is stored and no other run of the group is bound. It never jumps past older pending jobs. `run_cursor` is not used for events.
+- Backoff is bounded: base 5 seconds, doubling, cap 300 seconds, jittered to 75–100% of each step.
+- A pass is healthy when it consumed any run event, or when its connection stayed open at least 60 seconds after a successful open. A healthy end resets the failure streak and pauses 1 second.
+- Any other end of stream, a stream error, an `error` event, or a snapshot failure counts as a failure with backoff, so an inactive group's immediate end of stream does not busy-loop.
+- Each events connection is bounded at 10 minutes of wall-clock time, open and body. Expiry is a healthy end: after the 1-second pause the collector reconnects from the stored cursor. Each snapshot is bounded at 60 seconds, open and body; expiry is a failure with backoff. The SDK timeout bounds only the wait for response headers, so these deadlines bound a stalled body.
+- `retry-after` and `retry-after-ms` are honored on 429 and 503. When both the events open and the snapshot of a pass fail, the largest hint applies. Hints are capped at 15 minutes.
+- `action_required` runs stay watched after they are recorded, so a later completion of the same run is collected and announced as a separate notice.
 - SDK automatic retries are disabled (`maxRetries: 0`) on collector calls.
 - Each loop iteration's snapshot is the polling fallback when streaming is unavailable.
 - An uncertain submission not found in the snapshot stays uncertain and stops being polled.
 - Failed or cancelled runs record their outcomes without fetching a success result.
 - Fetch failures remain durable for explicit recovery, without recreating the paid job.
-- A run seen through both SSE and an optional signed webhook produces one result fetch and one notification.
-- Session stop, switch, or reload aborts the collector and waits for it to settle before the store closes.
+- A run seen through both SSE and an optional signed webhook is notified once per reported status, persistently: once a notice is acknowledged, a later entry for the same run and status is acknowledged without a second notice. A completion after `action_required` is a separate notice. Two processes can still fetch the same result concurrently. That fetch is an idempotent read that can add at most one extra artifact; no paid request repeats.
+- Session stop, switch, or reload aborts the collector and waits for it to settle before the store closes. A stopping runtime never sends a notification or acknowledges one; the next runtime of the same session delivers any unacknowledged notice.
   The replacement runtime rehydrates and resumes from the stored cursor. No remote group close occurs.
 
 Optional signed webhooks:
 If `PIPARA_WEBHOOK_URL` is set with a shared `PIPARA_WEBHOOK_DIR` and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry the per-run webhook.
 Legacy accepted work and `/parallel-webhook` recovery remain supported.
 The receiver's shared worker is an optional accelerator for offline collection, not a requirement.
-The existing implementation prunes handled events after 72 hours, including unacknowledged notifications.
-It also retires unmatched callbacks after a 30-minute registration grace period.
-Those policies need correction before stronger offline and delayed-registration guarantees apply to the optional path.
+Only handled and notified entries are pruned after 72 hours; unmatched callbacks and unacknowledged notifications remain retained.
 
 The [webhooks announcement](https://parallel.ai/blog/webhooks) says callbacks POST the “full result.”
 The [current Task webhook guide](https://docs.parallel.ai/task-api/webhooks) specifies a complete Task Run object instead, with no answer output or citations.
@@ -421,7 +422,7 @@ Required real scenarios:
 12. Repeated stream events, reconnects, and an optional webhook for the same run do not duplicate the result fetch, paid work, or notification, and do not misroute notifications.
 13. An offline owner's saved notification survives event pruning and is delivered on resume after the retention window.
 14. An uncertain dispatch is reconciled by run metadata from the snapshot, never resubmitted, and stays recoverable through restart. If not found it stays uncertain and unpolled.
-15. Stream error, error event, and immediate end of stream back off with bounded jitter and honor `retry-after`.
+15. Stream error, error event, and immediate end of stream back off with bounded jitter. The larger `retry-after` hint of a pass applies. A stalled connection or snapshot ends at its deadline.
 
 Record input, model/provider/runtime, dispatch timing, remote completion, artifact persistence, wake timing, errors, and actual outputs.
 Assess answer correctness and source support, not just output-file existence or a URL.

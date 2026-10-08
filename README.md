@@ -120,22 +120,24 @@ The backend has no group-close operation.
 Research state uses the existing `webhooks.sqlite` store, created automatically and kept private.
 `PIPARA_WEBHOOK_DIR` selects the location when set.
 Otherwise the store is `getAgentDir()/parallelized/webhooks/webhooks.sqlite`.
-There is no second database or registry of every Pi session.
+Each started Pi session records one small metadata row (ID, working directory, artifact directory) in that store. This is not a remote registry; startup creates no group and sends no request.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
 
 ## Outbound completion
 
-Status: implemented-in-progress on this branch.
+Status: implemented on this branch; live acceptance is pending.
 Live provider SSE and real model navigation are not verified. Offline tests use fake clients only.
 
 `deep_search` needs only provider credentials (`_PARALLEL_API_KEY`, or the compatible `PIPARA_API_KEY`) and the automatic private SQLite store.
 It needs no callback URL, listener, tunnel, public route, or signing secret.
 
 A collector inside the owning Pi session watches the session's Task Group.
-It takes a runs snapshot (no outputs), binds matching uncertain submissions, then reads the group event stream from the stored cursor.
+Each pass opens the group event stream from the stored cursor, takes a runs snapshot (no outputs) that binds matching uncertain submissions, then consumes the stream.
 Each completed, failed, cancelled, or action-required run state is saved before the cursor moves.
-On stream failure it backs off from 5 seconds, doubling to a 300-second cap with jitter, and honors `retry-after` up to 15 minutes.
+On stream or snapshot failure it backs off from 5 seconds, doubling to a 300-second cap with jitter. The largest `retry-after` hint from the pass applies, up to 15 minutes.
+Each events connection is bounded at 10 minutes and each snapshot at 60 seconds, so a stalled body cannot block recovery. A connection that reaches its deadline is treated as healthy and reconnects from the cursor.
+Action-required runs stay watched, so a later completion is collected.
 The snapshot on each loop iteration is the polling fallback.
 The existing result pipeline then fetches the answer once, saves the artifact and citation basis, and notifies only the owning session.
 Group events carry no answer, so the separate fetch stays.
@@ -149,7 +151,7 @@ Notification is acknowledged only after delivery. Exactly-once notification is n
 
 Signed webhooks are optional.
 With `PIPARA_WEBHOOK_URL`, a shared `PIPARA_WEBHOOK_DIR`, and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry a per-run webhook.
-The same run seen through both paths is fetched and notified once.
+The same run seen through both paths is notified once per reported status. A concurrent duplicate result fetch across processes is still possible; it is an idempotent read that can add one extra artifact, and no paid request repeats.
 The receiver's shared worker can then save results while Pi is closed.
 Legacy accepted work and `/parallel-webhook` recovery remain supported.
 Loading the extension starts no HTTP listener.

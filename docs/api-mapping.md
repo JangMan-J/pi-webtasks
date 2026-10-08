@@ -250,7 +250,8 @@ session_start
   -> resolve Pi session ID
   -> lookup its existing research association
   -> hydrate runtime groupId and attach recovery
-  -> no session-row insertion and no remote group creation
+  -> record local session metadata (ID, cwd, artifact directory) in the store
+  -> no group row inserted and no remote group creation
 
 deep submission
   -> validate all inputs and provider credentials
@@ -268,7 +269,7 @@ session switch/reload
 Only sessions that submit deep research get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
-SQLite is the existing store (`webhooks.sqlite`), not a second database or an all-session registry.
+SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds one session metadata row; group associations exist only for sessions that submit deep research.
 Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
 Session stop aborts and settles the collector. It does not close the remote group or drain research.
 
@@ -276,9 +277,9 @@ Session stop aborts and settles the collector. It does not close the remote grou
 
 ```text
 collector loop (inside the owning session)
-  -> getRuns snapshot (no outputs): bind matching uncertain submissions, record non-active runs
-  -> open GET /v1/tasks/groups/{id}/events from the stored last_event_id
-  -> record `outbound:<run_id>:<status>` in the events table; advance the cursor in the same transaction
+  -> open GET /v1/tasks/groups/{id}/events from the stored last_event_id (10-minute connection bound)
+  -> getRuns snapshot (no outputs, 60-second bound): bind matching uncertain submissions, record settled runs
+  -> consume events: record `outbound:<run_id>:<status>` in the events table; advance the cursor in the same transaction
   -> existing pipeline fetches the result once and saves the evidence artifact
   -> owning session receives a local-reference notification
   -> inactive owner retains the notification for resume
@@ -286,8 +287,11 @@ collector loop (inside the owning session)
 
 Group events carry no output, so the Task result fetch remains internal and one-shot.
 `task_group_status` events only advance the cursor.
-The cursor from group additions seeds the stored cursor only when none exists.
-Backoff is 5 seconds doubling to 300 seconds with jitter; `retry-after(-ms)` on 429 and 503 is honored up to 15 minutes; SDK retries are off for collector calls.
+The cursor from group additions seeds the stored cursor only when none exists and no other run of the group is bound.
+Backoff is 5 seconds doubling to 300 seconds with jitter; `retry-after(-ms)` on 429 and 503 is honored up to 15 minutes, and the largest hint applies when both requests of a pass fail; SDK retries are off for collector calls.
+A pass is healthy when it consumed run events, or its connection stayed open at least 60 seconds after a successful open: it resets the streak and pauses 1 second.
+Each events connection is bounded at 10 minutes wall-clock (expiry is healthy and reconnects from the cursor). Each snapshot is bounded at 60 seconds, open and body (expiry is a failure). The SDK timeout bounds only the time to response headers.
+`action_required` runs stay watched, so a later completion is collected as a separate notice.
 An uncertain submission missing from the snapshot stays uncertain and stops being polled.
 Status, result, and events requests are documented as not counted against the create rate limit; the collector still backs off.
 The documented maximum stream duration is one hour, and the SDK stream does not reconnect, so the collector reconnects from the cursor.
@@ -296,7 +300,7 @@ No new listener, daemon, or installed-package change is part of this checkout.
 
 An optional signed webhook (`PIPARA_WEBHOOK_URL`, shared `PIPARA_WEBHOOK_DIR`, running receiver) adds a per-run callback.
 The callback contains a Task Run status object, not the answer and citations.
-A run seen through both paths is fetched once and notified once.
+A run seen through both paths is notified once per reported status, persistently across batches. Two processes can still fetch the same result concurrently; that fetch is idempotent and no paid request repeats.
 
 ## MCP alternative
 

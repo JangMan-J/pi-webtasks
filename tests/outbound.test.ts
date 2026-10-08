@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebhookInbox } from "../src/webhook-inbox.ts";
 import { WebhookConsumer } from "../src/webhook-consumer.ts";
-import { OutboundCollector, outboundEntryId, retryAfterMs } from "../src/outbound.ts";
+import { OUTBOUND_BACKOFF, OutboundCollector, outboundEntryId, retryAfterMs } from "../src/outbound.ts";
 import { ResearchSession } from "../src/research.ts";
 import { setup, type Call } from "./helpers/test-host.ts";
 
@@ -38,15 +38,15 @@ function fakeClient(
   events: (query: { last_event_id?: string }, opts: { signal: AbortSignal }) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>,
   snapshot: (opts: { signal: AbortSignal }) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>> = () => stream([]),
 ) {
-  const calls: { kind: "events" | "snapshot"; last_event_id?: string; signal?: AbortSignal }[] = [];
+  const calls: { kind: "events" | "snapshot"; last_event_id?: string; signal?: AbortSignal; maxRetries?: number; timeout?: number }[] = [];
   const client = {
     taskGroup: {
-      events: async (_group: string, query: { last_event_id?: string }, opts: { signal: AbortSignal }) => {
-        calls.push({ kind: "events", last_event_id: query?.last_event_id, signal: opts?.signal });
+      events: async (_group: string, query: { last_event_id?: string }, opts: { signal: AbortSignal; maxRetries?: number; timeout?: number }) => {
+        calls.push({ kind: "events", last_event_id: query?.last_event_id, signal: opts?.signal, maxRetries: opts?.maxRetries, timeout: opts?.timeout });
         return events(query ?? {}, opts);
       },
-      getRuns: async (_group: string, _query: unknown, opts: { signal: AbortSignal }) => {
-        calls.push({ kind: "snapshot", signal: opts?.signal });
+      getRuns: async (_group: string, _query: unknown, opts: { signal: AbortSignal; maxRetries?: number; timeout?: number }) => {
+        calls.push({ kind: "snapshot", signal: opts?.signal, maxRetries: opts?.maxRetries, timeout: opts?.timeout });
         return snapshot(opts);
       },
     },
@@ -87,6 +87,24 @@ async function seed(inbox: WebhookInbox, dir: string, reference: string, runId?:
   else await inbox.updateResearch(reference, { status: "uncertain", error: "gateway 502" });
 }
 
+/** Yields the items, then stalls until aborted. Ends with an error, or quietly, the way an aborted SDK stream can. */
+function stalled(items: unknown[], signal: AbortSignal, throwOnAbort: boolean): AsyncIterable<unknown> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const item of items) yield item;
+      await new Promise<void>((resolve, reject) => signal.addEventListener("abort", () => (throwOnAbort ? reject(new Error("aborted")) : resolve()), { once: true }));
+    },
+  };
+}
+
+/** Replaces a method on a class prototype for one test; restored afterwards. */
+function patchMethod(t: { after(fn: () => void): void }, target: object, name: string, replacement: (this: any, original: any, ...args: any[]) => unknown) {
+  const proto = target as any;
+  const original = proto[name];
+  proto[name] = function (this: any, ...args: any[]) { return replacement.call(this, original.bind(this), ...args); };
+  t.after(() => { proto[name] = original; });
+}
+
 /** Sleeps are recorded, not waited for; a short real yield keeps the loop from starving the test. */
 function recordingSleep(sleeps: number[]) {
   return (ms: number, _signal: AbortSignal) => { sleeps.push(ms); return new Promise<void>(resolve => setTimeout(resolve, 2)); };
@@ -115,6 +133,7 @@ test("a settled run on the event stream becomes one outbound entry, and the curs
   });
   assert.equal((await inbox.getSessionGroup(SESSION))!.event_cursor, "e2", "cursor follows the durable entry");
   assert.equal(fake.calls[0]!.last_event_id, undefined, "a fresh group streams from the live status");
+  assert.ok(fake.calls.length > 0 && fake.calls.every(c => c.maxRetries === 0 && c.timeout === 60_000), "no SDK retries; header timeout only");
 });
 
 test("reconnect resumes after the stored cursor, and a replayed event adds no second entry", async t => {
@@ -282,6 +301,131 @@ test("a signed callback and the outbound stream for one run: one fetch, one noti
   }
 });
 
+test("a stalled events body ends by its connection deadline as a healthy end; the next pass resumes from the cursor", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("50"), "run_50");
+  const sleeps: number[] = [];
+  const fake = fakeClient((_query, opts) => {
+    const first = fake.calls.filter(c => c.kind === "events").length === 1;
+    return first ? stalled([statusEvent("e1")], opts.signal, true) : stream([]);
+  });
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0, deadlines: { connectionMs: 40 } });
+  collector.start();
+  await waitFor(() => fake.calls.filter(c => c.kind === "events").length >= 2);
+  await collector.stop();
+  assert.equal(sleeps[0], OUTBOUND_BACKOFF.healthyEofMs, "a deadline-ended connection is healthy: 1 s pause, not backoff");
+  assert.equal(fake.calls.filter(c => c.kind === "events")[1]!.last_event_id, "e1", "the next pass resumes from the durable cursor");
+});
+
+test("a snapshot that stalls past its deadline is a failure with backoff, even when its body ends quietly", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("51"), "run_51");
+  const sleeps: number[] = [];
+  const logs: string[] = [];
+  const fake = fakeClient(() => stream([]), (opts) => stalled([], opts.signal, false));
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0, deadlines: { snapshotMs: 40 }, onLog: m => logs.push(m) });
+  collector.start();
+  await waitFor(() => sleeps.length >= 1);
+  await collector.stop();
+  assert.equal(sleeps[0], 3_750, "first failure step, not a healthy pause");
+  assert.match(logs.join("\n"), /snapshot timed out/);
+  assert.ok(fake.calls.find(c => c.kind === "snapshot")!.signal!.aborted, "the snapshot request was aborted at its deadline");
+});
+
+test("when the events open and the snapshot both fail, the larger Retry-After hint sets the wait", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("52"), "run_52");
+  const sleeps: number[] = [];
+  const limited = Object.assign(new Error("rate limited"), { status: 429, headers: new Headers({ "retry-after-ms": "600000" }) });
+  const fake = fakeClient(() => { throw limited; }, () => { throw new Error("connection reset"); });
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  await waitFor(() => sleeps.length >= 1);
+  await collector.stop();
+  assert.equal(sleeps[0], 600_000, "the events hint is not lost when the snapshot also fails");
+});
+
+test("a healthy pass resets the failure streak, so the next quiet end of stream starts again at the base step", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("53"), "run_53");
+  const sleeps: number[] = [];
+  const responses: (() => AsyncIterable<unknown>)[] = [
+    () => stream([]),
+    () => stream([runEvent("e2", "run_53", "completed", meta(ref("53")))]),
+    () => stream([]),
+    () => stream([]),
+  ];
+  const fake = fakeClient(() => (responses.shift() ?? (() => stream([])))());
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep(sleeps), random: () => 0 });
+  collector.start();
+  await waitFor(() => sleeps.length >= 4);
+  await collector.stop();
+  assert.deepEqual(sleeps.slice(0, 4), [3_750, OUTBOUND_BACKOFF.healthyEofMs, 3_750, 7_500]);
+});
+
+test("a failed recording transaction rolls back: the cursor does not pass the lost event, and the next pass re-reads it", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("54"), "run_54");
+  const fake = fakeClient(() => {
+    const first = fake.calls.filter(c => c.kind === "events").length === 1;
+    // A value JSON cannot encode makes the recording transaction fail after its insert begins.
+    const bad = { ...run("run_54", "completed", meta(ref("54"))), metadata: { ...meta(ref("54")), poison: 10n } };
+    return stream(first
+      ? [statusEvent("e1"), { type: "task_run.state", event_id: "e2", run: bad }]
+      : [runEvent("e2", "run_54", "completed", meta(ref("54")))]);
+  });
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep([]), random: () => 0 });
+  collector.start();
+  await waitFor(async () => (await inbox.listAll()).some(e => e.webhook_id === "outbound:run_54:completed"));
+  await collector.stop();
+  const opens = fake.calls.filter(c => c.kind === "events");
+  assert.equal(opens[1]!.last_event_id, "e1", "after the failed transaction the cursor stayed at the last durable event");
+  assert.equal((await inbox.getSessionGroup(SESSION))!.event_cursor, "e2");
+  assert.equal((await inbox.listAll()).filter(e => e.webhook_id === "outbound:run_54:completed").length, 1);
+});
+
+test("an uncertain submission whose dispatch is still in flight in this runtime is not bound by a matching snapshot", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("55"), "run_55"); // gives the collector work
+  const created = Date.now();
+  await inbox.createResearch({ reference: ref("56"), session_id: SESSION, group_id: GROUP, query: "q", effort: "low", status: "dispatching", artifact_dir: join(dir, "results"), created_at: created, updated_at: created });
+  const fake = fakeClient(() => stream([]), () => stream([
+    runEvent(null, "run_56", "completed", meta(ref("56"))),
+    runEvent(null, "run_55", "running", meta(ref("55"))),
+  ]));
+  // Records created at or after the collector's start belong to this runtime's own dispatches.
+  const collector = new OutboundCollector({ session: await sessionFor(inbox, fake.client), sleep: recordingSleep([]), random: () => 0, startedAt: created });
+  collector.start();
+  await waitFor(() => fake.calls.some(c => c.kind === "snapshot"));
+  await delay(50);
+  await collector.stop();
+  assert.equal(await inbox.researchForRun("run_56"), undefined, "the in-flight dispatch is not bound by the collector");
+  const record = (await inbox.getResearch(ref("56")))!;
+  assert.equal(record.status, "dispatching");
+  assert.equal(record.run_id, undefined);
+  assert.equal((await inbox.listAll()).some(e => e.webhook_id === "outbound:run_56:completed"), false);
+});
+
+test("a second entry for an outcome already acknowledged is acknowledged without a second notice, even in a later batch", async t => {
+  const { dir, inbox } = await fixture(t);
+  await seed(inbox, dir, ref("57"), "run_57");
+  let fetches = 0;
+  const client = { taskRun: { result: async () => { fetches++; return { run: { run_id: "run_57" }, output: { content: "Cited", basis: [] } }; } } } as any;
+  const callback = { webhook_id: "wh-57", resource_id: "run_57", kind: "task" as const, event_type: "task_run.status", event: { type: "task_run.status", data: { run_id: "run_57", status: "completed" } } };
+  const consumer = new WebhookConsumer({ inbox, sessionId: SESSION, getClient: async () => client, artifactDir: join(dir, "results") });
+  await inbox.put(callback);
+  const first = await consumer.recover();
+  assert.equal(first.deliveries.length, 1);
+  await consumer.acknowledge(first.deliveries[0]!.webhook_id);
+  // The outbound entry for the same outcome is handled later, by another process, and never announced.
+  await inbox.recordOutbound({ session_id: SESSION, events: [settledEntry("run_57", "completed")] });
+  await inbox.markHandled(outboundEntryId("run_57", "completed"), { resource_id: "run_57", kind: "task", event_type: "task_run.status", result_artifact: join(dir, "x.json") });
+  const later = await consumer.recover();
+  assert.equal(later.deliveries.length, 0, "no second notice for the same run and status");
+  assert.deepEqual(await inbox.listHandledUnnotified(), [], "the duplicate is acknowledged");
+  assert.equal(fetches, 1);
+});
+
 // -------------------------------------------------- end to end through Pi's loader
 
 type TaskGroupState = { script: unknown[]; snapshotStatus: string; submitted: any[]; results: number; lastIds: (string | null)[] };
@@ -354,8 +498,7 @@ test("closed while running: the completion that arrives during the closed period
   await h.stop();
   assert.equal(h.sent.length, 0);
 
-  tg.script.push(runEvent("e2", "run_1", "completed", meta(reference)));
-  tg.snapshotStatus = "completed";
+  tg.script.push(runEvent("e2", "run_1", "completed", meta(reference))); // the snapshot still reports it running
   const reloaded = await h.instance(SESSION); // same Pi session ID after a reload
   const mark = tg.lastIds.length;
   await reloaded.start();
@@ -387,4 +530,73 @@ test("addRuns cursor: the first submission's cursor is adopted for resumption, a
   assert.equal((await probe.getSessionGroup(SESSION))!.event_cursor, "c-first", "the first run's cursor is adopted; the second never overwrites it");
   const streams = h.calls.filter(c => c.method === "GET" && c.path.endsWith("/events"));
   assert.equal(streams[0]!.query.get("last_event_id"), "c-first", "the collector resumes from the adopted cursor");
+});
+
+test("action_required then completion: each outcome is reported once, and completion is collected after the first notice", async t => {
+  const tg: TaskGroupState = { script: [statusEvent("e1"), runEvent("e2", "run_1", "action_required", {})], snapshotStatus: "running", submitted: [], results: 0, lastIds: [] };
+  const h = await setup(t, tgHost(tg), { sessionId: SESSION });
+  await h.start();
+  const reference = (await h.call("deep_search", { query: "needs input" })).details.references[0] as string;
+  await waitFor(() => h.sent.length === 1);
+  assert.match((h.sent[0]!.message as any).content, /needs action/);
+  // The run is continued and completes later; only the stored cursor and the watched record can find it.
+  tg.script.push(runEvent("e3", "run_1", "completed", meta(reference)));
+  await waitFor(() => h.sent.length === 2, 5_000);
+  assert.match((h.sent[1]!.message as any).content, /completed/);
+  assert.equal(tg.results, 1, "only the completion fetches a result");
+  await delay(100);
+  assert.equal(h.sent.length, 2, "no further notices for either outcome");
+});
+
+test("shutdown during a gated notification lookup sends nothing; the same session's next runtime notifies once", async t => {
+  const tg: TaskGroupState = { script: [], snapshotStatus: "completed", submitted: [], results: 0, lastIds: [] };
+  // Direct load: the test patches WebhookInbox, which the Pi loader's module instance would not share.
+  const h = await setup(t, tgHost(tg), { sessionId: SESSION, direct: true });
+  // Seed a settled outcome that is handled but not yet notified, as an earlier process would leave it.
+  const inbox = new WebhookInbox(h.inboxDir);
+  await inbox.beginSessionGroup(SESSION);
+  await inbox.completeSessionGroup(SESSION, GROUP);
+  const now = Date.now();
+  await inbox.createResearch({ reference: ref("60"), session_id: SESSION, group_id: GROUP, query: "q", effort: "low", status: "dispatching", artifact_dir: join(h.dir, "agent/webtasks/results"), created_at: now, updated_at: now });
+  await inbox.acceptResearch(ref("60"), "run_1");
+  await inbox.updateResearch(ref("60"), { status: "completed", artifact: join(h.dir, "saved.json") });
+  await inbox.recordOutbound({ session_id: SESSION, events: [settledEntry("run_1", "completed")] });
+  await inbox.markHandled(outboundEntryId("run_1", "completed"), { resource_id: "run_1", kind: "task", event_type: "task_run.status", result_artifact: join(h.dir, "saved.json") });
+  await inbox.close();
+
+  // The lookup is held, then completes while the session is stopping but before the runtime is released.
+  // The consumer's stop waits for that completion, which pins the window the guard must cover.
+  let gated = true;
+  let reached!: () => void;
+  const lookup = new Promise<void>(resolve => { reached = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let lookupDone!: () => void;
+  const finished = new Promise<void>(resolve => { lookupDone = resolve; });
+  patchMethod(t, WebhookInbox.prototype, "researchForRun", async function (original, id) {
+    if (gated) { reached(); await gate; }
+    const out = await original(id);
+    lookupDone();
+    return out;
+  });
+  patchMethod(t, WebhookConsumer.prototype, "stop", async function (original) {
+    await finished;
+    await delay(20); // let the notification path reach its post-lookup check while still stopping
+    return original();
+  });
+
+  const starting = h.start();
+  await lookup;
+  const stopping = h.stop();
+  gated = false;
+  release();
+  await stopping;
+  await starting;
+  assert.equal(h.sent.length, 0, "a stopping runtime never notifies");
+
+  const again = await h.instance(SESSION);
+  await again.start();
+  await waitFor(() => again.sent.length === 1);
+  assert.equal((again.sent[0]!.message as any).details.reference, ref("60"));
+  await again.stop();
 });

@@ -25,18 +25,18 @@ Status: implementation in progress. No installation or publication occurred.
 | Prior model set | `anthropic/claude-sonnet-5-5`, `antigravity/gemini-3.7-flash`, and `openai-codex/gpt-6.1-sol` appear in the current model catalog. |
 | Current receiver | An existing user-systemd process serves `127.0.0.1:8787/parallel/webhook`. GET returns 405. |
 | Current ingress | An existing Cloudflare tunnel targets the receiver. Its configured HTTPS URL fails DNS resolution from this machine. This no longer blocks `deep_search`, which needs no public callback. |
-| Outbound completion | Implemented-in-progress on `feature/outbound-completion`. Offline tests with fake clients only. Contract basis is the Task Group API docs and `parallel-web` 1.3.3. |
+| Outbound completion | Implemented on `feature/outbound-completion`, with offline implementation and tests using fake clients (`tests/outbound.test.ts`, plus the consumer and lifecycle suites). Findings from the independent review are fixed in this branch. Contract basis is the Task Group API docs and `parallel-web` 1.3.3. |
 
-Worker conclusions support only their stated checks.
-Full integration and affected-flow reruns remain pending.
+The offline implementation and tests support only the checks they run.
+Remaining before release: an independent reviewer rerun of the fixed revision, full integration and affected-flow reruns, and live acceptance.
 Local fake clients do not establish a live research result, live SSE behavior, or optional public callback delivery.
 Model catalog presence is not proof that a model request succeeds.
 
 ## Remaining release checks
 
 1. Run store-backed public-tool tests after the backend contract lands.
-2. Adapt the end-to-end lifecycle test to the new public tools and the in-session collector.
-3. Verify with fake clients: cursor persistence, reconnect, backoff, snapshot binding, SSE/webhook deduplication, retention, and resume notification.
+2. Adapt the end-to-end lifecycle test to the new public tools and the in-session collector. Done offline: `tests/outbound.test.ts` and `tests/webhook-lifecycle.test.ts` run registered tools with the in-session collector.
+3. Verify with fake clients: cursor persistence, reconnect, backoff, snapshot binding, SSE/webhook deduplication, retention, and resume notification. Offline coverage exists in `tests/outbound.test.ts` (including cursor rollback and the connection and snapshot deadlines), and retention in `tests/webhook-inbox.test.ts`. Live verification remains item 7.
 4. Run full type checks and the current offline suite.
 5. Inspect package contents and verify that credentials and runtime artifacts are absent.
 6. Load this checkout alone through native Pi and verify real model/tool navigation with targeted paid calls.

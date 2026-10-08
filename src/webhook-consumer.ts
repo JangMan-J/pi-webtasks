@@ -13,9 +13,9 @@
 
 import { watch, type FSWatcher } from "node:fs";
 import type { Parallel } from "parallel-web";
-import { WebhookInbox, type ResourceKind } from "./webhook-inbox.ts";
+import { WebhookInbox, reportedRunStatus, type ResourceKind } from "./webhook-inbox.ts";
 import type { ResearchRecord } from "./research-types.ts";
-import { processInbox, taskRunStatus } from "./webhook-worker.ts";
+import { processInbox } from "./webhook-worker.ts";
 
 export { normalizeEvent } from "./webhook-worker.ts";
 export type { ConsumerAction, NormalizedEvent } from "./webhook-worker.ts";
@@ -132,7 +132,7 @@ export class WebhookConsumer {
 
   /** Caller ACK after an actual successful session notification. */
   async acknowledge(webhook_id: string): Promise<void> {
-    await this.inbox.markNotified(webhook_id);
+    await this.inbox.acknowledgeDelivery(webhook_id);
   }
 
   private async processPending(retryFailed: boolean): Promise<number> {
@@ -152,21 +152,23 @@ export class WebhookConsumer {
 
   private async collectDeliveries(): Promise<Delivery[]> {
     const deliveries: Delivery[] = [];
-    // A run can be reported by both a signed callback and the outbound stream. Notify once per
-    // run and reported status; a later different status (for example completion after
-    // action_required) is its own notification. The duplicate is acknowledged without a notice.
-    const notified = new Set<string>();
+    // A run can be reported by both a signed callback and the outbound stream, possibly in different
+    // processes and different batches. One notice per run and reported status: an outcome already
+    // acknowledged (persistent) or already in this batch is acknowledged without a second notice.
+    // A different status, such as completion after action_required, is its own notice.
+    const inBatch = new Set<string>();
     for (const entry of await this.inbox.listHandledUnnotified()) {
       if (!entry.resource_id || !entry.kind) continue;
       const registration = await this.inbox.getRegistration(entry.resource_id);
       if (!registration || registration.session_id !== this.sessionId) continue;
       if (entry.kind === "task") {
-        const key = `${entry.resource_id}:${taskRunStatus(entry.event) ?? ""}`;
-        if (notified.has(key)) {
+        const status = reportedRunStatus(entry.event);
+        const duplicate = status !== undefined && (inBatch.has(`${entry.resource_id}:${status}`) || await this.inbox.isRunStatusNotified(entry.resource_id, status));
+        if (duplicate) {
           await this.inbox.markNotified(entry.webhook_id);
           continue;
         }
-        notified.add(key);
+        if (status !== undefined) inBatch.add(`${entry.resource_id}:${status}`);
       }
       const research = entry.kind === "task" ? await this.inbox.researchForRun(entry.resource_id) : undefined;
       const delivery: Delivery = {

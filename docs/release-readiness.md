@@ -62,7 +62,7 @@ Same isolation: private `WEBTASKS_DIR`, no `WEBTASKS_WEBHOOK_URL`, no receiver, 
 
 Paid calls this follow-up: **25 provider calls** (an earlier record said 26). Derivation, from the session transcripts and cross-checked against each run's `logs/run.jsonl` `paid-call` lines:
 
-| Category | Calls | Unit price (published or tool guideline) | Estimate |
+| Category | Calls | Unit price (published pricing, or the tool guidance at the time) | Estimate |
 | --- | ---: | --- | ---: |
 | Search query (`web_search` with `query`) | 6 | $0.001 (Search `fast`) | $0.006 |
 | Extract (`web_search` with `urls`, one URL each) | 3 | $0.001 per URL | $0.003 |

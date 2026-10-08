@@ -335,8 +335,38 @@ test("effort policy: exact backend choice per level for discovery, conversation 
   assert.deepEqual(processors, ["core", "core", "pro", "ultra2x"]);
   assert.equal(h.calls.filter(c => c.path === "/v1/search").length, 4, "one request per call: no automatic escalation");
   for (const c of h.calls) assert.doesNotMatch(JSON.stringify(c.body ?? {}), /turbo|"ultra"|"base"/);
-  const cost = JSON.stringify([...h.tools.values()].map((tool: any) => tool.promptGuidelines));
-  for (const price of ["$0.025", "$0.10", "$0.60", "$0.01,", "$0.05,", "$0.25", "$0.001", "$0.005"]) assert.ok(cost.includes(price), price);
+});
+
+/** Every string the model reads about a tool: description, prompt snippet, guidelines, and parameter descriptions at any depth. */
+function modelFacingText(tool: any): string[] {
+  const out: string[] = [tool.description, tool.promptSnippet, ...(tool.promptGuidelines ?? [])];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const description = (node as { description?: unknown }).description;
+    if (typeof description === "string") out.push(description);
+    for (const value of Object.values(node)) walk(value);
+  };
+  walk(tool.parameters);
+  return out.filter((text): text is string => typeof text === "string");
+}
+
+// A "$" anywhere, or a whole cost word with its common inflections. Whole words keep "costume", "priceless",
+// and "recharge" from matching.
+const COST_TEXT = /\$|\b(usd|price|prices|pricing|cost|costs|costly|cheap|cheaper|cheapest|cheaply|billing|charge|charges|charged|charging)\b/i;
+
+test("no model-facing tool text states or hints at a cost, and the scan itself is sound", async t => {
+  const h = await setup(t, () => json({}));
+  for (const tool of h.tools.values() as Iterable<any>) {
+    const text = modelFacingText(tool);
+    assert.ok(text.length >= 3, `${tool.name} exposes its text to the scan`);
+    for (const line of text) assert.doesNotMatch(line, COST_TEXT, `${tool.name}: ${line.slice(0, 100)}`);
+  }
+  for (const word of ["costume", "priceless", "recharge", "discharge", "charger", "pricer"]) {
+    assert.doesNotMatch(word, COST_TEXT, `${word} is not a cost word`);
+  }
+  for (const word of ["costs about", "$0.01", "Usd", "a cheap option", "billing period", "price"]) {
+    assert.match(word, COST_TEXT, `${word} is a cost word`);
+  }
 });
 
 test("a stale runtime never notifies after a session switch during the lookup, and the delivery stays unacknowledged", async t => {

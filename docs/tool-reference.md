@@ -131,7 +131,7 @@ FindAll enrichment uses `output_schema`, not `task_spec`.
 
 ## Task processor prices
 
-These reference prices match the extension's pricing guidance. They are not a live billing quote.
+These are the provider's published reference prices, for people reading these docs. They are not tool text and not a live billing quote.
 Start new Task work with standard `base` or `core`. Higher tiers increase the cost per run.
 
 | Processor | USD per run |
@@ -148,4 +148,4 @@ Start new Task work with standard `base` or `core`. Higher tiers increase the co
 
 Explicit `-fast` variants remain supported and cost the same as their corresponding standard processors.
 Group charges apply per Task run, not per group. FindAll enrichment also uses Task pricing.
-Normal-tier prices for Search, Extract, Responses, FindAll, and Monitor remain in their tool descriptions.
+The tools' descriptions and guidelines do not state prices. Published prices for Search, Extract, Responses, FindAll, and Monitor are on the provider's pricing page.

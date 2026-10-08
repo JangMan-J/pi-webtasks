@@ -5,15 +5,6 @@ import { Parallel, APIError, APIConnectionTimeoutError } from "parallel-web";
 import { verifyWebhook } from "./webhook.ts";
 import { PartialResponseError, errorData, researchFailure, researchOutput } from "./results.ts";
 
-export const PRICING = {
-  search: "USD: turbo/fast $1/1k requests (10 results), basic/advanced $5/1k; extra results $1/1k.",
-  extract: "USD: $0.001/URL.",
-  task: "USD/run: lite $0.005, base $0.01, core $0.025. Fast variants cost the same.",
-  responses: "USD: low $0.01, medium $0.05, high $0.25.",
-  monitor: "USD/check: lite $0.003, base $0.01.",
-  findall: "USD: preview $0.10, base $0.25+$0.03/match, core $2+$0.15/match, pro $10+$1/match. Entity search $0.005 (100 results). Enrichment uses Task pricing.",
-};
-
 export const SEARCH_DEFAULTS = { max_results: 20, max_chars_total: 50_000, max_chars_per_result: 10_000 } as const;
 export const EXTRACT_DEFAULTS = { max_chars_total: 100_000, max_chars_per_result: 20_000, full_content: true } as const;
 

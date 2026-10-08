@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {ROOT,PIN,PI_VERSION,exec,readJSON,saveJSON,sha,verifyBaseline,schedule,publicModelCatalog} from './core.ts';
+import {ROOT,PIN,PI_VERSION,exec,readJSON,saveJSON,sha,verifyBaseline,schedule,publicModelCatalog,resolveBenchPath} from './core.ts';
 
 export async function prepare() {
   const spec=readJSON(path.join(ROOT,'docs/benchmark-cases.json'));
@@ -23,10 +23,10 @@ export async function prepare() {
   for(const name of ['parallel-web','typebox']) fs.cpSync(path.join(ROOT,'node_modules',name),path.join(modules,name),{recursive:true,dereference:true});
   if(readJSON(path.join(modules,'parallel-web/package.json')).version!=='1.3.3')throw Error('SDK version drift');
   const resources=path.join(runtime,'resources');fs.mkdirSync(resources,{recursive:true});
-  fs.cpSync(lock.skills_root,resources,{recursive:true});
-  fs.mkdirSync(path.join(resources,'find-docs'),{recursive:true});fs.copyFileSync(lock.shared_dependency.source,path.join(resources,'find-docs/SKILL.md'));
+  fs.cpSync(resolveBenchPath(lock.skills_root),resources,{recursive:true});
+  fs.mkdirSync(path.join(resources,'find-docs'),{recursive:true});fs.copyFileSync(resolveBenchPath(lock.shared_dependency.source),path.join(resources,'find-docs/SKILL.md'));
   const helper=path.join(runtime,'helper');fs.mkdirSync(helper,{recursive:true});
-  fs.copyFileSync(lock.responses_helper.path,path.join(helper,'parallel-research'));
+  fs.copyFileSync(resolveBenchPath(lock.responses_helper.path),path.join(helper,'parallel-research'));
   fs.copyFileSync(path.join(ROOT,'bench/helper-adapter.py'),path.join(helper,'adapter.py'));
   const bin=path.join(runtime,'bin');fs.mkdirSync(bin,{recursive:true});
   fs.writeFileSync(path.join(bin,'parallel-research'),'#!/bin/sh\nexec python3 /opt/helper/adapter.py "$@"\n',{mode:0o755});

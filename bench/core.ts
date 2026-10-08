@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {execFile} from 'node:child_process';
@@ -35,9 +36,27 @@ export function schedule(spec: any) {
       prompt:c.prompt,...(c.followup_prompt?{followup_prompt:c.followup_prompt}:{})}));
   });
 }
+/**
+ * Lock paths were recorded under the previous install account. Read the same
+ * relative path from $HOME. The responses helper was not migrated into
+ * ~/.local/bin; its hash-pinned copy is bench/baseline/parallel-research.
+ */
+export function resolveBenchPath(recorded: string): string {
+  const home = process.env.HOME || os.homedir();
+  const match = /^\/home\/([^/]+)\/(.+)$/.exec(recorded);
+  if (!match || match[1] === path.basename(home)) return recorded;
+  const relocated = path.join(home, match[2]);
+  if (fs.existsSync(relocated)) return relocated;
+  if (match[2] === '.local/bin/parallel-research') {
+    const vendored = path.join(ROOT, 'bench/baseline/parallel-research');
+    if (fs.existsSync(vendored)) return vendored;
+  }
+  return relocated;
+}
 export function verifyBaseline(lock:any) {
-  for(const [name, hash] of Object.entries(lock.files_sha256)) if(sha(fs.readFileSync(path.join(lock.skills_root,name)))!==hash) throw Error(`Baseline changed: ${name}`);
-  for(const item of [lock.responses_helper,{path:lock.shared_dependency.source,sha256:lock.shared_dependency.sha256}]) if(sha(fs.readFileSync(item.path))!==item.sha256) throw Error(`Baseline changed: ${item.path}`);
+  const skillsRoot = resolveBenchPath(lock.skills_root);
+  for(const [name, hash] of Object.entries(lock.files_sha256)) if(sha(fs.readFileSync(path.join(skillsRoot,name)))!==hash) throw Error(`Baseline changed: ${name}`);
+  for(const item of [lock.responses_helper,{path:lock.shared_dependency.source,sha256:lock.shared_dependency.sha256}]) if(sha(fs.readFileSync(resolveBenchPath(item.path)))!==item.sha256) throw Error(`Baseline changed: ${item.path}`);
 }
 export function publicModelCatalog(provider:string, modelId:string, source:any) {
   const p=source.providers?.[provider];

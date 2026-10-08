@@ -69,6 +69,10 @@ If the map is incomplete, its `omitted` count and `next_line` identify the remai
 
 ### Background callbacks
 
+This section describes the legacy per-call webhook controls for existing tools.
+The three-tool `deep_search` path completes through outbound collection and needs no callback; see [api-mapping](api-mapping.md#outbound-completion).
+Webhooks are optional.
+
 With `PIPARA_WEBHOOK_URL` and `PIPARA_WEBHOOK_DIR` configured, new Task, Group, FindAll, and Monitor runs receive callbacks automatically.
 When the notice fits, the creation receipt reports local registration. A verified completion saves the result artifact and wakes the owning session.
 Do not poll or recreate a run while awaiting that notification. Read the artifact named in the follow-up.

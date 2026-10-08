@@ -7,7 +7,8 @@ Status: implementation in progress. No installation or publication occurred.
 - Exactly three model tools, including native synchronous people/company search in `web_search`.
 - Lookup-only startup and lazy Task Group initialization for actual deep submissions.
 - Existing SQLite inbox for research references, conversation references, and durable recovery.
-- Background result processing inside the existing receiver process, not a new daemon.
+- Outbound completion through Task Group SSE with bounded polling fallback, run inside the owning Pi session, not a new daemon.
+- Signed webhooks and the receiver's shared worker are optional.
 - No new async FindAll workflows, monitoring, or account administration.
 - Installed extension, settings, credential stores, and running processes remain untouched.
 
@@ -23,22 +24,25 @@ Status: implementation in progress. No installation or publication occurred.
 | Native runtime | Installed Pi reports `1.0.4`; Node reports `v26.10.0`. |
 | Prior model set | `anthropic/claude-sonnet-5-5`, `antigravity/gemini-3.7-flash`, and `openai-codex/gpt-6.1-sol` appear in the current model catalog. |
 | Current receiver | An existing user-systemd process serves `127.0.0.1:8787/parallel/webhook`. GET returns 405. |
-| Current ingress | An existing Cloudflare tunnel targets the receiver. Its configured HTTPS URL fails DNS resolution from this machine. |
+| Current ingress | An existing Cloudflare tunnel targets the receiver. Its configured HTTPS URL fails DNS resolution from this machine. This no longer blocks `deep_search`, which needs no public callback. |
+| Outbound completion | Implemented-in-progress on `feature/outbound-completion`. Offline tests with fake clients only. Contract basis is the Task Group API docs and `parallel-web` 1.3.3. |
 
 Worker conclusions support only their stated checks.
 Full integration and affected-flow reruns remain pending.
-Local mock transport does not establish a live research result or public callback.
+Local fake clients do not establish a live research result, live SSE behavior, or optional public callback delivery.
 Model catalog presence is not proof that a model request succeeds.
 
 ## Remaining release checks
 
 1. Run store-backed public-tool tests after the backend contract lands.
-2. Adapt the end-to-end lifecycle test to the new public tools and same-process result worker.
-3. Verify stopped-owner collection, delayed registration, callback deduplication, retention, and resume notification.
+2. Adapt the end-to-end lifecycle test to the new public tools and the in-session collector.
+3. Verify with fake clients: cursor persistence, reconnect, backoff, snapshot binding, SSE/webhook deduplication, retention, and resume notification.
 4. Run full type checks and the current offline suite.
 5. Inspect package contents and verify that credentials and runtime artifacts are absent.
 6. Load this checkout alone through native Pi and verify real model/tool navigation with targeted paid calls.
-7. Verify actual provider callback delivery against the new receiver implementation after an authorized deployment.
+7. Verify live provider SSE against the real API with one authorized small run: event shape, `last_event_id` resume, stream end behavior, and result fetch.
+8. Verify real model navigation of `deep_search` (item 6) including a session close and reopen during a run.
+9. Optional: verify actual provider callback delivery against the receiver after an authorized deployment.
 
 No broad paid matrix, account mutation, or monitoring experiment is required.
 Effort policy is user-confirmed: discovery fast/basic/advanced, Responses low/medium/high, and Tasks core/pro/ultra2x.
@@ -49,7 +53,7 @@ Caller-defined strict output schemas remain an open contract choice.
 ## Checkout versus installed copy
 
 This repository is the implementation target.
-The running receiver uses `~/.pi/agent/git/github.com/JangMan-J/pi-parallelized/src/webhook-receiver.ts`.
-Its installed code does not acquire this checkout's new worker through a source edit here.
-Production deployment must replace the receiver code in the existing process configuration, not add another process.
+The optional running receiver uses `~/.pi/agent/git/github.com/JangMan-J/pi-parallelized/src/webhook-receiver.ts`.
+Its installed code does not acquire this checkout's changes through a source edit here.
+`deep_search` does not depend on it. Using the optional receiver with this checkout needs a separate deployment into the existing process configuration.
 That deployment and any public-route repair remain separate from local release preparation.

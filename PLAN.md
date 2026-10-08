@@ -2,7 +2,11 @@
 
 Status: implementation authorized. Tool coverage remains subject to [the mapping review](docs/api-mapping.md).
 Installation, publication, and changes to the running receiver remain separate.
-Webhook-first completion and existing SQLite persistence are now the design direction.
+Outbound completion and existing SQLite persistence are the design direction.
+Latest user decision ("switch us over") supersedes the earlier webhook-first decision.
+`deep_search` completes through outbound Task Group SSE with bounded background polling fallback, and mandatory webhooks are removed.
+This is implemented-in-progress on branch `feature/outbound-completion`.
+Live provider SSE and real model navigation are not verified. Only offline tests with fake clients exist.
 
 ## 1. Target and scope
 
@@ -37,7 +41,7 @@ The source references appear in section 10.
 | Drop lower-value tiers within a latency band, unless they provide a distinct benefit. | S1, line 418 |
 | Validate navigation on different real agent models and scenarios, using real research services. | S1, lines 35 and 41 |
 | Use the credential names already deployed on this system. | S3, line 140 |
-| Build around webhook delivery. | Current review identifies webhooks as the service's strongest part. SQLite reuse follows the existing implementation. |
+| Build around webhook delivery. | Superseded by the latest user decision: outbound Task Group SSE with polling fallback, webhooks optional. The earlier review's praise of webhooks and the SQLite reuse remain as history. |
 
 Historical permission to spend does not authorize unrelated experiments.
 The later user explicitly stopped unnecessary spending in S3, lines 229 and 232.
@@ -132,9 +136,10 @@ Require a query, a research reference, or both.
 | Query and completed reference | Submit an explicit follow-up grounded in the saved research. |
 
 Return after dispatch and durable tracking, without waiting for remote completion.
-Configure a completion webhook on each submitted run.
-Persist and deliver results through the webhook path.
-Keep callback configuration outside the model-facing fields.
+Complete each submitted run through the outbound collector described in [outbound completion](#outbound-completion).
+Persist and deliver results through the existing inbox pipeline.
+A per-run webhook is attached only when optional webhook configuration exists.
+Keep transport configuration outside the model-facing fields.
 A pending or incompatible reference must not silently become a new paid submission.
 Reject submission settings on reference-only reads rather than implying that they alter existing work.
 
@@ -199,7 +204,7 @@ Do not maintain a registry of every Pi session.
 Only a session that submits deep research gets a durable session/group association.
 
 Groups organize submissions and result snapshots.
-Completion is per run through webhooks, not through a required group event stream.
+Completion is per run, observed through the group's outbound event stream with a runs-snapshot fallback.
 They do not provide an execution lifecycle that the extension must close.
 The old runtime-lifetime closure contract is superseded by the start/stop hook decision.
 
@@ -213,7 +218,7 @@ Startup is lookup-only. Do not create a group or insert a session row for a fres
 
 ### First deep submission
 
-Validate the entire submission and callback configuration before remote work.
+Validate the entire submission and provider credentials before remote work.
 When the runtime group ID is missing, await one shared initialization promise for that session.
 Persist the research initialization intent, create the group, save its ID, then populate the runtime cache before adding tasks.
 Concurrent initial submissions must not create competing groups.
@@ -223,25 +228,25 @@ Reset or rebind the cache on session switch and reload.
 New calls select processors per submitted task.
 The group itself has no processor setting.
 A group setup failure must leave a clear research-tool error without disabling unrelated Pi work.
-Missing callback configuration must prevent paid deep submissions rather than silently switching to polling or SSE.
-Routine search and conversational research remain independent of callback setup.
-Do not maintain a competing group event stream for normal completion.
+`deep_search` needs only provider credentials and the automatic private SQLite store.
+No callback URL, listener, tunnel, public route, or signing secret is required.
+Routine search and conversational research remain independent of deep-research setup.
 
 ### Session stop
 
 1. Prevent new submissions through the outgoing runtime.
 2. Save accepted run IDs, results already received, delivery state, and unresolved submission records.
-3. Stop the session's local watcher and notification callbacks.
-4. Release its runtime ownership without discarding the saved group or stopping the shared receiver.
+3. Abort the session's outbound collector and wait for it to settle before the store closes, then stop local notification callbacks.
+4. Release its runtime ownership without discarding the saved group or closing the remote group.
 
 Handle in-flight dispatch separately from research execution.
 Preserve an interrupted or unresolved dispatch as uncertain rather than creating a replacement task.
 Do not wait for all remote research to finish merely to stop the session.
-The shared receiver can continue accepting authenticated callbacks while Pi is closed.
-The proposed shared result worker saves completed outputs without waiting for that session to resume.
+The outbound collector runs only inside the owning Pi session, so collection pauses while Pi is closed.
+On startup it reconciles registered pending jobs, and completions that happened while closed are found by the startup snapshot.
 Pending notifications are delivered when the owning session resumes.
-Until that worker is implemented and verified, result collection remains dependent on the active Pi consumer.
-Do not promise results beyond account retention or callback delivery guarantees.
+An optional signed-webhook receiver with a shared store can still save results while Pi is closed.
+Do not promise results beyond account retention.
 
 Reload performs this local stop, then startup reattaches the same group to the replacement runtime.
 A resumed session can add tasks to its existing inactive group.
@@ -294,55 +299,81 @@ After acceptance, persist the returned resource identity before reporting accept
 Disable automatic retries on paid creation/addition and uncertain conversational requests.
 Use safe retrieval to reconcile uncertainty. If reconciliation cannot establish acceptance, report it without creating replacement work.
 
-Set the same configured callback and required event subscription on every group input.
+When optional webhooks are configured, set the same callback and event subscription on every group input.
 There is no group-level webhook or group-level processor setting.
-Correlate callbacks through their run IDs and persisted ownership, not through arrival order.
-Callbacks that arrive before registration remain pending or quarantined until the matching registration is available.
-Do not finalize an unresolved submission's callback merely because a local grace period expires.
+Correlate events and callbacks through run IDs and persisted ownership, not through arrival order.
+Events that arrive before registration remain pending or quarantined until the matching registration is available.
+Do not finalize an unresolved submission merely because a local grace period expires.
 Late registration must allow reprocessing after a crash or delayed dispatch reconciliation.
-Keep unmatched callbacks non-routable until ownership is established.
+Keep unmatched events non-routable until ownership is established.
 
-### Webhook-first completion
+### Outbound completion
+
+Contract basis: [Task Group API](https://docs.parallel.ai/task-api/group-api) and installed `parallel-web` 1.3.3.
+`GET /v1/tasks/groups/{id}/events` streams `task_group_status`, `task_run.state`, and `error` events.
+Run events carry no output, so the result is fetched separately.
+Resumption uses `last_event_id`; the SDK stream does not reconnect on its own.
+The documented maximum stream duration is one hour.
+`GET` status, result, and events requests are documented as not counted against the create rate limit, but the collector still backs off.
 
 ```text
-Submit run with callback
-  -> verify incoming signature
-  -> persist and deduplicate callback in SQLite
-  -> acknowledge HTTP delivery
-  -> claim event and fetch successful result once
-  -> save evidence and record outcome
-  -> notify active owner, or retain notification for resume
+Submit run (per-run webhook only if optionally configured)
+  -> reconcile with group runs snapshot (getRuns, no outputs)
+  -> bind uncertain or dispatching submissions whose run metadata matches
+  -> durably record non-active runs
+  -> open group events stream from the stored last_event_id
+  -> record each terminal or non-active run state, then advance the cursor
+  -> existing inbox pipeline claims the event and fetches the result once
+  -> save evidence, record outcome
+  -> notify the owning session, or retain the notification for resume
 ```
 
-Keep one shared receiver independent of individual Pi sessions.
-Reuse the existing verifier, durable inbox, claim logic, one-shot retrieval, and notification acknowledgement.
-Do not expose signing secrets or callback transport to the agent.
-Invalid or unsigned callbacks must not trigger result requests or model turns.
-Failed or cancelled runs record their outcomes without fetching a success result.
-Fetch failures remain durable for explicit recovery, without recreating the paid job or starting a polling loop.
+Rules:
 
-Proposed extension to the existing implementation: separate shared result processing from session-specific notification.
-The current consumer performs both inside Pi, so a closed owner delays result fetching.
-A shared worker can retrieve and save results for registered runs while their owner is offline.
-That worker does not claim another session's notifications or send through stale contexts.
-Keep result retrieval outside the receiver's HTTP acknowledgement path.
-Verify this offline-owner behavior against the real callback route before claiming it works.
+- The collector runs inside the owning Pi session's runtime. There is no new daemon.
+- A snapshot binds an uncertain or dispatching submission only when its run metadata (`webtasks_ref`, session, group) matches. It never rebinds an accepted run and never resubmits.
+- Each completed, failed, cancelled, or action-required run state is recorded in the existing SQLite events table under the deterministic id `outbound:<run_id>:<status>`.
+- The cursor advances in the same transaction, only after durable recording.
+- `task_group_status` events only advance the cursor.
+- The `event_cursor` returned by group additions seeds the cursor only when none is stored. It never jumps past older pending jobs. `run_cursor` is not used for events.
+- Backoff is bounded: base 5 seconds, doubling, cap 300 seconds, jittered.
+- A stream error, an `error` event, or end of stream without run events triggers backoff, so an inactive group's immediate end of stream does not busy-loop.
+- `retry-after` and `retry-after-ms` are honored on 429 and 503, capped at 15 minutes.
+- SDK automatic retries are disabled (`maxRetries: 0`) on collector calls.
+- Each loop iteration's snapshot is the polling fallback when streaming is unavailable.
+- An uncertain submission not found in the snapshot stays uncertain and stops being polled.
+- Failed or cancelled runs record their outcomes without fetching a success result.
+- Fetch failures remain durable for explicit recovery, without recreating the paid job.
+- A run seen through both SSE and an optional signed webhook produces one result fetch and one notification.
+- Session stop, switch, or reload aborts the collector and waits for it to settle before the store closes.
+  The replacement runtime rehydrates and resumes from the stored cursor. No remote group close occurs.
+
+Optional signed webhooks:
+If `PIPARA_WEBHOOK_URL` is set with a shared `PIPARA_WEBHOOK_DIR` and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry the per-run webhook.
+Legacy accepted work and `/parallel-webhook` recovery remain supported.
+The receiver's shared worker is an optional accelerator for offline collection, not a requirement.
 The existing implementation prunes handled events after 72 hours, including unacknowledged notifications.
 It also retires unmatched callbacks after a 30-minute registration grace period.
-Those policies need correction before the stronger offline and delayed-registration guarantees apply.
+Those policies need correction before stronger offline and delayed-registration guarantees apply to the optional path.
 
-The supplied [webhooks announcement](https://parallel.ai/blog/webhooks) says callbacks POST the “full result.”
-The [current Task webhook guide](https://docs.parallel.ai/task-api/webhooks) specifies a complete Task Run object instead.
-Its success example contains status and metadata, without answer output or citations.
-Retain the separate result fetch rather than interpreting the announcement as a result-payload guarantee.
+The [webhooks announcement](https://parallel.ai/blog/webhooks) says callbacks POST the “full result.”
+The [current Task webhook guide](https://docs.parallel.ai/task-api/webhooks) specifies a complete Task Run object instead, with no answer output or citations.
+Group events likewise carry no output, so the separate result fetch stays.
+
+Limits:
+
+- Collection happens only while the owning session is open, unless the optional receiver is deployed.
+- Account retention bounds how long runs can be found.
+- Live provider SSE is unverified.
+- Exactly-once notification is not guaranteed because of the crash window below.
 
 Persist evidence before notifying the owning session.
 Recheck ownership immediately before sending through the current runtime.
 Do not send through stale contexts after reload or session replacement.
 Mark a notification acknowledged only after delivery succeeds.
 Deduplicate events and notification state, but document the crash window between a Pi side effect and its SQLite acknowledgement.
-Use callbacks as the primary completion path, not parallel webhook and SSE collectors.
-Use status/result snapshots only for explicit bounded recovery.
+Outbound collection is the primary completion path. The optional webhook is deduplicated against it by run and status.
+Use status/result snapshots for explicit bounded recovery.
 Completed references remain readable without another paid request.
 Reading another session's reference does not silently transfer its group ownership.
 
@@ -353,7 +384,7 @@ Reading another session's reference does not silently transfer its group ownersh
 | 1. Baseline and identity | Establish the unchanged baseline. Propose package identity `pi-webtasks` and a `webtasks` artifact namespace. Preserve the configured SQLite inbox. | No wholesale dirty-tree import, credential copy, or installed-package change. |
 | 2. Three-tool adapter | Replace registrations and public guidance with the reviewed schemas. Preserve useful result helpers and human commands. | Exactly three registrations, no operation taxonomy, invalid inputs rejected before dispatch. |
 | 3. Routine and conversation paths | Query/page retrieval, readable evidence, durable immutable conversation references. | Real query, real known page, cited answer, and continued answer work. |
-| 4. Deep research module | SQLite state, session hook initialization, group dispatch with per-run callbacks, shared result processing, owner notification, reference reads, and local cleanup. | Real callbacks persist results during active and stopped sessions without duplicate paid work or a remote-research drain. |
+| 4. Deep research module | SQLite state, session hook initialization, group dispatch, in-session outbound collector (SSE with polling fallback), shared result processing, owner notification, reference reads, and local cleanup. | Outbound collection persists results while the session is open and after restart without duplicate paid work or a remote-research drain. Live provider SSE is still to be verified. | |
 | 5. Effort wiring | Implement the confirmed tier policy once. | All three paths use the exact mapping, default low, and never escalate. Untiered branches reject effort. |
 | 6. Model navigation | Adapt the existing three-tool harness and run the authorized real scenarios. | Agents navigate the interface and meet [the acceptance checks](#9-acceptance-and-verification). |
 | 7. Documentation and packaging | Describe only verified behavior. Build and inspect the package. | Manifest, source registrations, instructions, examples, tests, and packaged contents agree. |
@@ -379,17 +410,18 @@ Required real scenarios:
 1. A natural query chooses `web_search`. A known URL uses its page-reading path.
 2. A cited answer and follow-up reuse the returned conversation reference.
 3. Session start only loads an existing group. Concurrent first deep submissions create one group and return before research completion.
-4. Independent local work continues while research runs, then a verified webhook produces a useful completion notification and report.
+4. Independent local work continues while research runs, then outbound collection produces a useful completion notification and report.
 5. Reference-only reads do not issue creation/addition requests or duplicate charges.
-6. Reload during research retains the group and routes webhook-driven delivery through the replacement runtime.
-7. Session stop persists pending work and detaches notifications without stopping the shared receiver or waiting for remote completion.
+6. Reload during research retains the group and resumes collection from the stored cursor and routes delivery through the replacement runtime.
+7. Session stop persists pending work and aborts the collector and detaches notifications without waiting for remote completion or closing the group.
 8. Recovery reuses known work and preserves explicit failed, cancelled, uncertain, and action-required states.
-9. Comparison and structured-list briefs produce usable answers. Native people/company search uses no group or callback.
+9. Comparison and structured-list briefs produce usable answers. Native people/company search uses no group or collector.
 10. Resume reuses the saved inactive group and can add new tasks without changing old run identities.
-11. A real callback received while Pi is stopped leads to a saved result and a notification on resume.
-12. Callback retries and callback-before-registration races do not duplicate paid work or misroute notifications.
+11. A run that completes while Pi is stopped is found by the startup snapshot, saved, and notified on resume.
+12. Repeated stream events, reconnects, and an optional webhook for the same run do not duplicate the result fetch, paid work, or notification, and do not misroute notifications.
 13. An offline owner's saved notification survives event pruning and is delivered on resume after the retention window.
-14. A callback received before an uncertain dispatch is reconciled remains recoverable through delayed registration and restart.
+14. An uncertain dispatch is reconciled by run metadata from the snapshot, never resubmitted, and stays recoverable through restart. If not found it stays uncertain and unpolled.
+15. Stream error, error event, and immediate end of stream back off with bounded jitter and honor `retry-after`.
 
 Record input, model/provider/runtime, dispatch timing, remote completion, artifact persistence, wake timing, errors, and actual outputs.
 Assess answer correctness and source support, not just output-file existence or a URL.
@@ -408,7 +440,7 @@ Implementation is now authorized. Limit paid scenarios to targeted acceptance or
 - Previous contract: `~/Projects/JangLabs/pi-parallelized/.pi-herdsman/three-search-contract.md`
 - Saved probe: `~/Projects/JangLabs/pi-parallelized/.pi/three-tool-tier-probe/`, including `report.md`, `calls/`, and `anchors/`.
 - Current baseline helpers: `src/index.ts`, `src/ops.ts`, `src/results.ts`, `src/evidence.ts`, and the existing webhook modules.
-- Existing callback flow: `src/webhook-receiver.ts` verifies and persists before HTTP acknowledgement. `src/webhook-consumer.ts` gates result retrieval by owner session.
+- Optional callback flow: `src/webhook-receiver.ts` verifies and persists before HTTP acknowledgement. `src/webhook-consumer.ts` gates result retrieval by owner session.
 - Existing SQLite implementation: `src/webhook-inbox.ts` uses WAL, durable commits, deduplication, and transactional processing claims.
 - Existing integration documentation: [webhook integration](docs/webhook-integration.md). Historical route verification does not verify the new shared-worker behavior.
 - User-supplied overview: https://parallel.ai/blog/webhooks. Use https://docs.parallel.ai/task-api/webhooks for the current payload contract.

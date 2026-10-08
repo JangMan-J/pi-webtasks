@@ -37,7 +37,7 @@ They do not establish acceptance of the three-command interface.
 
 ## Credentials
 
-Use the existing `_PARALLEL_API_KEY` and `PARALLEL_WEBHOOK_KEY` environment variables.
+Use the existing `_PARALLEL_API_KEY` environment variable. `PARALLEL_WEBHOOK_KEY` is needed only for the optional webhook receiver.
 The latter is the signing secret, not the research key.
 Explicit `PIPARA_API_KEY` and `PIPARA_WEBHOOK_SECRET` remain supported for compatibility.
 Exported settings take precedence over adjacent `.env` or `parallel.env` defaults.
@@ -69,7 +69,7 @@ Use native Fast Entity Search:
 
 The entity branch supports only people and companies.
 It requests one synchronous lookup, with a documented default of 100 results.
-It requires no group, callback, or session/group association.
+It requires no group, collector, or session/group association.
 URLs and domain filters are incompatible with this branch.
 Published price is $0.005 per request, including 100 results.
 Ranked entity results are not native FindAll verification or enrichment.
@@ -113,35 +113,50 @@ The first deep submission initializes one group through a shared in-flight promi
 It persists the group ID before adding Task runs, then caches it for normal submissions.
 Reload and resume recover the association. Session switches do not reuse another session's cache.
 Routine, entity, conversation, and reference-only calls never create groups.
-Session stop saves accepted work and detaches local notification handling without draining remote research.
+Session stop aborts the outbound collector, waits for it to settle, saves accepted work, and detaches local notification handling without draining remote research.
+A replacement runtime resumes collection from the stored cursor.
 The backend has no group-close operation.
 
-Research state uses the existing `webhooks.sqlite` inbox.
-`PIPARA_WEBHOOK_DIR` selects the shared location.
-The conventional location remains `getAgentDir()/parallelized/webhooks` for compatibility.
+Research state uses the existing `webhooks.sqlite` store, created automatically and kept private.
+`PIPARA_WEBHOOK_DIR` selects the location when set.
+Otherwise the store is `getAgentDir()/parallelized/webhooks/webhooks.sqlite`.
 There is no second database or registry of every Pi session.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
 
-## Existing webhook receiver
+## Outbound completion
 
-Deep submission requires `PIPARA_WEBHOOK_URL` and an explicit shared `PIPARA_WEBHOOK_DIR`.
-Do not launch a second listener when the existing receiver already runs.
+Status: implemented-in-progress on this branch.
+Live provider SSE and real model navigation are not verified. Offline tests use fake clients only.
+
+`deep_search` needs only provider credentials (`_PARALLEL_API_KEY`, or the compatible `PIPARA_API_KEY`) and the automatic private SQLite store.
+It needs no callback URL, listener, tunnel, public route, or signing secret.
+
+A collector inside the owning Pi session watches the session's Task Group.
+It takes a runs snapshot (no outputs), binds matching uncertain submissions, then reads the group event stream from the stored cursor.
+Each completed, failed, cancelled, or action-required run state is saved before the cursor moves.
+On stream failure it backs off from 5 seconds, doubling to a 300-second cap with jitter, and honors `retry-after` up to 15 minutes.
+The snapshot on each loop iteration is the polling fallback.
+The existing result pipeline then fetches the answer once, saves the artifact and citation basis, and notifies only the owning session.
+Group events carry no answer, so the separate fetch stays.
+
+Collection pauses while Pi is closed.
+On startup the collector reconciles registered pending jobs, so completions that happened while closed are found.
+Account retention and the documented one-hour maximum stream bound this; the collector reconnects from the cursor.
+Notification is acknowledged only after delivery. Exactly-once notification is not guaranteed because of a crash window.
+
+## Optional webhook receiver
+
+Signed webhooks are optional.
+With `PIPARA_WEBHOOK_URL`, a shared `PIPARA_WEBHOOK_DIR`, and a running receiver (`PARALLEL_WEBHOOK_KEY` or `PIPARA_WEBHOOK_SECRET`), runs also carry a per-run webhook.
+The same run seen through both paths is fetched and notified once.
+The receiver's shared worker can then save results while Pi is closed.
+Legacy accepted work and `/parallel-webhook` recovery remain supported.
 Loading the extension starts no HTTP listener.
 
-The receiver verifies callbacks and commits them to SQLite before HTTP acknowledgement.
-Result processing belongs inside that same receiver process.
-The callback contains status; the worker fetches the completed answer separately.
-It saves the answer and citation basis before recording completion.
-Only the owning Pi session delivers and acknowledges its notification.
-An inactive owner retains its pending notification for resume.
-Delayed registration and unacknowledged notifications must survive local cleanup.
-
-The current installed process still runs the installed `pi-parallelized` receiver.
+The currently installed process still runs the installed `pi-parallelized` receiver.
 Changing files in this checkout does not update that process.
-Production use of the new worker requires a separate deployment of this checkout's receiver code.
-Installation and public-route changes are outside the implementation scope.
-The [webhook guide](docs/webhook-integration.md) describes configuration and recovery.
+The [webhook guide](docs/webhook-integration.md) describes the optional configuration and recovery.
 
 ## Limits
 
@@ -155,7 +170,8 @@ The [webhook guide](docs/webhook-integration.md) describes configuration and rec
 - Result retrieval does not generate a missing alternative format.
 - Complete redacted evidence stays on disk even if previews omit content.
 - Paid submissions never retry automatically after uncertain acceptance.
-- A real public callback and model-navigation check remain necessary before claiming full research acceptance.
+- Collection runs only while the owning session is open, unless the optional receiver is deployed.
+- Live provider SSE and model-navigation checks remain necessary before claiming full research acceptance.
 
 The [effort review](docs/effort-qualification.md) records saved evidence and its limits.
 The [historical README](docs/legacy-interface.md) preserves the old interface for comparison.

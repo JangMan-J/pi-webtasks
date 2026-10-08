@@ -7,11 +7,12 @@ Installation, publication, and changes to the running receiver remain separate.
 ## Review summary
 
 - **Chosen workflows:** source discovery, page reading, synchronous people/company search, cited conversation, and background Task research.
-- **Intentional omissions:** monitoring, account administration, stream/poll controls, and arbitrary callback settings.
+- **Intentional omissions:** monitoring, account administration, model-facing stream/poll controls, and arbitrary callback settings.
 - **Entity coverage:** native Fast Entity Search in `web_search`. No new async FindAll discovery, expansion, or enrichment.
 - **Open contract choice:** caller-defined strict JSON schema. Retrieving a result does not generate a different output format.
-- **Release checks:** cross-slice integration, real model navigation, and actual provider callback delivery remain unverified.
-- **Deployment blocker:** the configured public callback URL fails DNS resolution from this machine.
+- **Release checks:** cross-slice integration, real model navigation, and live provider SSE collection remain unverified.
+- **Completion transport:** outbound Task Group SSE with bounded polling fallback, run inside the owning session. Webhooks are optional.
+- **Deployment:** `deep_search` needs no public callback. The configured public callback URL still fails DNS resolution from this machine, which matters only for the optional webhook path.
 - **Effort:** user-confirmed policy. Default is `low`, with no automatic escalation.
 - **MCP:** an alternative, not an approved replacement. Its documented later-turn result retrieval does not establish automatic offline delivery.
 
@@ -129,7 +130,8 @@ The initial implementation submits one Task input per addition to avoid uncertai
 ## What happens to the existing research methods?
 
 “Internal” means the method still runs when needed. Its controls disappear from the model interface.
-“Recovery” means an explicit, bounded read. It does not mean continuous polling.
+“Recovery” means an explicit, bounded read.
+The internal collector's snapshot polling is separate and bounded by backoff.
 “Omitted” means the new interface does not provide that capability.
 
 | Existing surface | New mapping | Disposition |
@@ -139,20 +141,20 @@ The initial implementation submits one Task input per addition to avoid uncertai
 | Responses create | `interactive_search.question`, `effort`, `domains` | Internal request construction. |
 | Responses continuation | `interactive_search.conversation` | Local reference resolves the remote response identity. |
 | Task create | `deep_search.query` | Group addition creates the Task; no separate create action. |
-| Task result | Verified completion callback | Internal one-shot result fetch after the callback. |
+| Task result | Outbound run-state event (or optional verified webhook) | Internal one-shot result fetch after the event. |
 | Task status | `deep_search.research` recovery | Explicit bounded snapshot or dispatch reconciliation. |
 | Task input | Persisted submission brief | No input-retrieval control. Retain a read only if reconciliation needs it. |
-| Task progress events | None | Omitted from normal completion. No competing event stream. |
+| Task progress events | None | Run-level progress events are omitted. |
 | Task Group create | First deep submission with no cached group | Internal lazy initialization. |
 | Task Group add | Deep submission after group initialization | Internal dispatch. |
 | Task Group status/run snapshots | Recovery of known work | Internal bounded reconciliation, never paid resubmission. |
-| Task Group runs/events streams | None in normal completion | Omitted transport controls. Webhooks drive completion. |
+| Task Group runs/events streams | Internal completion transport | Runs snapshot (no outputs) reconciles; `GET /v1/tasks/groups/{id}/events` resumed by `last_event_id` drives completion. No model-facing controls. |
 | FindAll ingest/preview/create | Not mapped in the initial Task path | Specialized entity enumeration remains a coverage gap. |
 | FindAll entity search | `web_search.query` and `entity` | Native synchronous people/company search. No group or callback. |
 | FindAll extend/exclusions | Not mapped | No native match-count expansion or exclusion-list continuation. |
 | FindAll enrich/schema | Not mapped | No native per-entity enrichment or schema guarantee. |
 | FindAll result/status | Existing registered legacy work | Preserve recovery internally; do not strand accepted runs. |
-| FindAll events | None for new work | Webhooks replace completion transport, not enumeration semantics. |
+| FindAll events | None for new work | Outbound or webhook completion replaces transport, not enumeration semantics. |
 | Monitor create/update/trigger/cancel/list/events | None | Explicitly excluded from the three-tool interface. Preserve accepted legacy registrations. |
 | Remote Memory retrieve/evict/clear | None | Local references do not reproduce remote memory administration. No deletion control. |
 | Account management | Existing human login/logout/balance commands | No account model tool or new administration commands. |
@@ -207,8 +209,8 @@ That capability needs an explicit creation-time contract decision, not a new ret
 | Task input/task specification/output schema | Brief becomes Task input with an internal cited-report specification. Machine-enforced arbitrary schemas are omitted. |
 | Query batches | Exposed by `deep_search.query` array. Group membership and transport are internal. |
 | `run_id`, `taskgroup_id`, `findall_id`, response/interaction IDs | Internal SQLite state and diagnostic artifacts. Normal results use local references. |
-| `wait_seconds`, polling and stream cursors | Removed from normal calls. Deep submission returns without awaiting completion. |
-| `webhook_url`, webhook events and signing scheme | Deployment configuration and required per-run subscription. No agent override or opt-out. |
+| `wait_seconds`, polling and stream cursors | Removed from model calls. Deep submission returns without awaiting completion. The collector keeps its own stored cursor. |
+| `webhook_url`, webhook events and signing scheme | Optional deployment configuration. When set, runs carry the per-run subscription. No agent override. |
 | `enable_events` | No progress-stream workflow. Backend defaults can remain, but callers do not consume them. |
 | MCP configuration and tool allowlists | Omitted. No model-supplied endpoints or credential headers. |
 | Metadata/client-model/session identifiers | Derived internally where needed for correlation and diagnostics. |
@@ -251,7 +253,7 @@ session_start
   -> no session-row insertion and no remote group creation
 
 deep submission
-  -> validate all inputs and callback configuration
+  -> validate all inputs and provider credentials
   -> if runtime groupId is missing: await shared ensureGroup promise
   -> persist initialization intent for this research session
   -> create group once, persist its ID, then cache it
@@ -266,37 +268,44 @@ session switch/reload
 Only sessions that submit deep research get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
-SQLite is the existing webhook store, not a second database or an all-session registry.
+SQLite is the existing store (`webhooks.sqlite`), not a second database or an all-session registry.
 Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
-Session stop does not close the remote group or drain research.
+Session stop aborts and settles the collector. It does not close the remote group or drain research.
 
-## Webhook completion
+## Outbound completion
 
 ```text
-Task completes
-  -> existing receiver verifies callback
-  -> SQLite stores/deduplicates it before HTTP acknowledgement
-  -> processing inside that same receiver process fetches the result
-  -> private evidence artifact precedes completed state
+collector loop (inside the owning session)
+  -> getRuns snapshot (no outputs): bind matching uncertain submissions, record non-active runs
+  -> open GET /v1/tasks/groups/{id}/events from the stored last_event_id
+  -> record `outbound:<run_id>:<status>` in the events table; advance the cursor in the same transaction
+  -> existing pipeline fetches the result once and saves the evidence artifact
   -> owning session receives a local-reference notification
-  -> inactive owner retains notification for resume
+  -> inactive owner retains the notification for resume
 ```
 
-The callback contains a Task Run status object, not the answer and citations.
-The result fetch remains internal; only the polling controls disappear.
+Group events carry no output, so the Task result fetch remains internal and one-shot.
+`task_group_status` events only advance the cursor.
+The cursor from group additions seeds the stored cursor only when none exists.
+Backoff is 5 seconds doubling to 300 seconds with jitter; `retry-after(-ms)` on 429 and 503 is honored up to 15 minutes; SDK retries are off for collector calls.
+An uncertain submission missing from the snapshot stays uncertain and stops being polled.
+Status, result, and events requests are documented as not counted against the create rate limit; the collector still backs off.
+The documented maximum stream duration is one hour, and the SDK stream does not reconnect, so the collector reconnects from the cursor.
 Retrieval and session notification remain separate.
-Unacknowledged notifications survive event pruning. Delayed registration must not discard the callback.
-No new listener, daemon, or installed-package change is part of this checkout's implementation.
-Using the new worker in production requires a separate deployment of this checkout's receiver code.
+No new listener, daemon, or installed-package change is part of this checkout.
+
+An optional signed webhook (`PIPARA_WEBHOOK_URL`, shared `PIPARA_WEBHOOK_DIR`, running receiver) adds a per-run callback.
+The callback contains a Task Run status object, not the answer and citations.
+A run seen through both paths is fetched once and notified once.
 
 ## MCP alternative
 
 | Question | Current three-command design | Official MCP tools |
 | --- | --- | --- |
 | Routine retrieval | One query/URL command plus native entity intent | Search MCP exposes `web_search` and `web_fetch`. |
-| Long research | Local references, lazy Task group, verified callbacks | Task MCP exposes create, group, status, and Markdown-result tools. |
-| Completion | Existing receiver persists outcomes and routes owner notifications | Current docs require an additional turn to request ready results. |
-| Offline owner | Same receiver process can save results while Pi is stopped | Automatic offline artifact storage and session routing are not established. |
+| Long research | Local references, lazy Task group, outbound SSE collector | Task MCP exposes create, group, status, and Markdown-result tools. |
+| Completion | In-session collector persists outcomes and routes owner notifications | Current docs require an additional turn to request ready results. |
+| Offline owner | Collection pauses while Pi is closed and resumes by snapshot on startup. An optional receiver can save results offline. | Automatic offline artifact storage and session routing are not established. |
 | Maintenance | Curated request mapping plus local persistence and delivery | Hosted tools reduce custom request mapping, but do not remove local delivery requirements. |
 
 No MCP replacement or extra adapter is authorized.
@@ -304,7 +313,7 @@ If later-turn retrieval replaces automatic notification as the desired outcome, 
 
 ## Source basis and deciding checks
 
-- `PLAN.md`: recovered intent, exclusions, evidence limits, and webhook guarantees.
+- `PLAN.md`: recovered intent, exclusions, evidence limits, and the outbound completion decision.
 - Latest user decisions: lazy initialization, lookup-only startup, per-session runtime cache, and no extra database.
 - User-confirmed tier screenshot: discovery fast/basic/advanced, Responses low/medium/high, Tasks core/pro/ultra2x. No private screenshot data is stored here.
 - `src/ops.ts`: current research request construction and one-shot retrieval helpers.
@@ -313,12 +322,12 @@ If later-turn retrieval replaces automatic notification as the desired outcome, 
 - `parallel-web@1.3.3`, `resources/task-run.d.ts`: per-input source policy, context, metadata, and webhook fields.
 - `parallel-web@1.3.3`, `resources/beta/findall.d.ts`: native entity-search fields, default 100, and people/company scope.
 - [Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) and [Task MCP](https://docs.parallel.ai/integrations/mcp/task-mcp): hosted tools and later-turn completion limit.
-- [Current callback guide](https://docs.parallel.ai/task-api/webhooks): status payload contract.
+- [Current callback guide](https://docs.parallel.ai/task-api/webhooks): status payload contract for the optional webhook.
+- [Task Group API](https://docs.parallel.ai/task-api/group-api) and `parallel-web@1.3.3`, `resources/task-group.d.ts`: `events` (`last_event_id`, `timeout`), `getRuns`, event types, and no output in group events.
 - [Task result contract](https://docs.parallel.ai/api-reference/tasks/retrieve-task-run-result.md): one schema-selected output.
 - [Published pricing](https://docs.parallel.ai/resources/pricing): successful Task Run pricing, not output-field pricing.
 - Saved qualification: `~/Projects/JangLabs/pi-parallelized/.pi/three-tool-tier-probe/`.
 - Live group probe: `.pi/group-status-probe/2026-10-07T18-50-05.627Z/REPORT.md`.
 
-Before claiming release readiness, verify the registered schemas, paid-request behavior, durable recovery, and actual callback delivery.
-Isolated loopback tests establish local correctness, not public provider delivery or model navigation.
-The configured public callback URL currently fails DNS resolution from this machine.
+Before claiming release readiness, verify the registered schemas, paid-request behavior, durable recovery, and live provider SSE collection.
+Offline tests with fake clients establish local correctness, not live provider streaming or model navigation.

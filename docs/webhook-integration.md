@@ -1,5 +1,9 @@
 # Parallel webhook integration
 
+> Note: deep research completes through outbound Task Group SSE with polling fallback inside the owning session; see [outbound completion](api-mapping.md#outbound-completion).
+> Webhooks are optional. This guide applies only when you choose to run the signed receiver.
+> Live provider SSE is not yet verified.
+
 This optional integration connects signed callbacks to the Pi session that created each resource.
 It is off by default. Loading the extension starts no HTTP listener.
 The implementation follows the current [Task webhook guide](https://docs.parallel.ai/task-api/webhooks) and [verification guide](https://docs.parallel.ai/resources/webhook-setup).

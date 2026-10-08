@@ -467,21 +467,30 @@ test("current research rows gain interaction and parent columns without losing l
   assert.equal((await inbox.getResearch("research_old"))?.run_id, "trun_old");
 });
 
-test("a database with the legacy pi_sessions table opens unchanged; nothing reads or writes that table", async t => {
+test("opening a store drops the legacy pi_sessions table and keeps research, session groups and events", async t => {
   const dir = await tmp(t);
-  const first = new WebhookInbox(dir);
-  await first.init();
-  await first.close();
+  const seeded = new WebhookInbox(dir);
+  await seeded.beginSessionGroup("s-old");
+  await seeded.completeSessionGroup("s-old", "tg_old");
+  await seeded.createResearch({ reference: "research_old", session_id: "s-old", group_id: "tg_old", query: "q", effort: "low", status: "pending", artifact_dir: dir, created_at: 1, updated_at: 1 });
+  await seeded.put({ webhook_id: "wh-old", event: { type: "task_run.status" }, resource_id: "trun_old", kind: "task" });
+  await seeded.close();
+
   const legacy = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  legacy.exec("CREATE TABLE pi_sessions (session_id TEXT PRIMARY KEY, cwd TEXT NOT NULL, artifact_dir TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
   legacy.prepare("INSERT INTO pi_sessions (session_id, cwd, artifact_dir, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("s-legacy", "/work", "/results", 10, 10);
   legacy.close();
+
   const reopened = new WebhookInbox(dir);
   t.after(() => reopened.close());
-  assert.equal(await reopened.getSessionGroup("s-legacy"), undefined, "no group is implied by the legacy row");
-  assert.equal(await reopened.getSessionGroup("s-search"), undefined);
+  assert.deepEqual((await reopened.getSessionGroup("s-old"))?.group_id, "tg_old");
+  assert.equal((await reopened.getResearch("research_old"))?.status, "pending");
+  assert.equal((await reopened.listAll()).length, 1);
+  assert.equal(await reopened.getSessionGroup("s-legacy"), undefined, "the legacy row implies no group");
+
   const check = new DatabaseSync(join(dir, "webhooks.sqlite"));
   try {
-    assert.equal((check.prepare("SELECT COUNT(*) AS n FROM pi_sessions").get() as { n: number }).n, 1, "the legacy row is kept, not dropped");
+    assert.deepEqual(check.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pi_sessions'").all(), []);
   } finally {
     check.close();
   }

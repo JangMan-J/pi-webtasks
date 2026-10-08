@@ -460,11 +460,21 @@ function retrievalHost(overrides: Record<string, (call: Call) => Response> = {})
       : json({ error: `unexpected ${call.path}` }, 500));
 }
 
-/** Row count of one of the store's own tables, read on a separate connection. */
-function rowCount(dir: string, table: "pi_sessions" | "session_groups"): number {
+/** Row count of the store's group table, read on a separate connection. */
+function groupRows(dir: string): number {
   const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
   try {
-    return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    return (db.prepare("SELECT COUNT(*) AS n FROM session_groups").get() as { n: number }).n;
+  } finally {
+    db.close();
+  }
+}
+
+/** Whether the store has the per-session table from earlier builds. It is dropped when the store opens. */
+function hasSessionTable(dir: string): boolean {
+  const db = new DatabaseSync(join(dir, "webhooks.sqlite"));
+  try {
+    return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pi_sessions'").all().length > 0;
   } finally {
     db.close();
   }
@@ -478,13 +488,13 @@ test("session start is lookup-only: no session row, no group, no request; reload
     await h.start();
     const db = await store(h.inboxDir);
     t.after(() => db.close());
-    assert.equal(rowCount(h.inboxDir, "pi_sessions"), 0, "a fresh start writes no session row");
-    assert.equal(rowCount(h.inboxDir, "session_groups"), 0, "a fresh start writes no group row");
+    assert.equal(hasSessionTable(h.inboxDir), false, "a fresh start creates no session table");
+    assert.equal(groupRows(h.inboxDir), 0, "a fresh start writes no group row");
     assert.equal(await db.getSessionGroup("session-a"), undefined, "no group row before the first deep submission");
     await h.stop();
     await (await h.instance("session-a")).start();
     await (await h.instance("session-b")).start(); // a new or forked session
-    assert.equal(rowCount(h.inboxDir, "pi_sessions"), 0, "reload and a new session write no session row");
+    assert.equal(hasSessionTable(h.inboxDir), false, "reload and a new session create no session table");
     assert.equal(await db.getSessionGroup("session-b"), undefined, "a new session has no group until it submits");
     assert.equal(h.calls.length, 0, "startup sends nothing to the provider");
   }

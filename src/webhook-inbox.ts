@@ -511,17 +511,8 @@ export class WebhookInbox {
     const researchCols = (db.prepare("PRAGMA table_info(research)").all() as { name: string }[]).map(c => c.name);
     if (!researchCols.includes("interaction_id")) db.exec("ALTER TABLE research ADD COLUMN interaction_id TEXT");
     if (!researchCols.includes("parent")) db.exec("ALTER TABLE research ADD COLUMN parent TEXT");
-    // Legacy table from the earlier per-session metadata row. Nothing writes or reads it now; it stays so
-    // existing databases open unchanged. No DROP.
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS pi_sessions (
-        session_id TEXT PRIMARY KEY,
-        cwd TEXT NOT NULL,
-        artifact_dir TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `);
+    // Removes the per-session table from earlier builds. Nothing reads or writes it; opening a store drops it.
+    db.exec("DROP TABLE IF EXISTS pi_sessions");
     db.exec(`
       CREATE TABLE IF NOT EXISTS search_activity (
         reference TEXT PRIMARY KEY,

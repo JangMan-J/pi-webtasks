@@ -269,7 +269,7 @@ session switch/reload
 Only sessions that submit deep research get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
-SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research.
+SQLite is the existing store (`webhooks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research. Opening a store drops the `pi_sessions` table from earlier builds; research, group, and event rows are kept.
 Uncertain acceptance retains the intent and known identities. Recovery never assumes that another paid submission is safe.
 Session stop aborts and settles the collector. It does not close the remote group or drain research.
 

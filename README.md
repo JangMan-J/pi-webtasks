@@ -121,6 +121,7 @@ Research state uses the existing `webhooks.sqlite` store, created automatically 
 `PIPARA_WEBHOOK_DIR` selects the location when set.
 Otherwise the store is `getAgentDir()/parallelized/webhooks/webhooks.sqlite`.
 Startup is lookup-only. It writes no session row, creates no remote group, and sends no request. Ownership and resume use the research records and the session's group row.
+Opening a store drops the `pi_sessions` table from earlier builds, which nothing reads; research, group, and event rows are kept.
 New evidence artifacts use `getAgentDir()/webtasks/results`.
 Existing accepted work and artifacts remain accessible.
 

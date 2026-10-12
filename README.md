@@ -8,14 +8,18 @@ Three web research tools for Pi:
 | `interactive_search` | Get a cited answer and continue through a local conversation reference. |
 | `deep_search` | Submit background research or read its saved result through a local research reference. |
 
+An additional codemode-only tool, `webtasks_submit`, accepts advanced SDK Task options through the same tracked completion flow.
+The [advanced SDK guide](docs/advanced-sdk.md) covers custom output schemas, native options, and local research references.
+
 Implementation and integration verification are in progress.
-The [mapping](docs/api-mapping.md) separates chosen workflows, intentional omissions, and open output-schema decisions.
+The [mapping](docs/api-mapping.md) separates ordinary workflows, advanced Tasks, and intentional omissions.
 The [release checklist](docs/release-readiness.md) records validation and remaining blockers.
 This checkout does not replace the installed extension or restart any running process.
 
 ## Development
 
-Requirements: Node.js 22.19 or later and npm.
+Requirements: Node.js 22.19 or later, npm, and Pi 1.1 or later.
+Advanced Task submission requires codemode.
 The only runtime dependency is the pinned `parallel-web` SDK.
 SQLite uses Node's built-in implementation.
 
@@ -26,6 +30,8 @@ npm pack --dry-run
 ```
 
 `npm run check` runs type checks and the offline regression suite.
+`PI_PACKAGE_DIR` selects another installed Pi package directory for runtime tests.
+The native codemode test requires Pi 1.1 and skips with the older development fixture.
 Local tests use real SQLite, private temporary artifacts, and signed loopback HTTP callbacks.
 Controlled external responses support failure and recovery tests.
 Those tests do not establish live provider delivery or real model navigation.
@@ -114,11 +120,13 @@ An explicit follow-up combines a new query with a completed research reference.
 A query array submits independent briefs to the same session's group.
 Reference-only calls reject effort and domains.
 
+In a Pi TUI, `webtasks` publishes one colored status line for web results, interactive answers, distinct source URLs in completed deep reports' Sources indexes, and estimated Parallel API cost. Cost shows `0` until it reaches half a cent, two decimals up to $9.99, whole dollars from $10, and compact notation from $1,000. The estimate uses [Parallel's published list rates](https://parallel.ai/pricing) for successful calls and completed Task runs since this extension runtime started. It resets on reload and excludes free credits, discounts, and uncertain requests; it is not the account's billed balance.
+
 ## Session and group behavior
 
 Startup looks up the Pi session ID and hydrates any existing group.
 It never registers a fresh session or creates a remote group.
-The first deep submission initializes one group through a shared in-flight promise.
+The first `deep_search` or `webtasks_submit` submission initializes one group through a shared in-flight promise.
 It persists the group ID before adding Task runs, then caches it for normal submissions.
 Reload and resume recover the association. Session switches do not reuse another session's cache.
 Routine, entity, conversation, and reference-only calls never create groups.
@@ -168,15 +176,24 @@ Loading the extension starts no HTTP listener.
 A receiver installed from the earlier `pi-parallelized` checkout is not verified on this machine. Its location is absent under this account and may belong to another account. Changing files in this checkout does not update any running process.
 The [webhook guide](docs/webhook-integration.md) describes the optional configuration and recovery.
 
+## Agent-bus wake-ups
+
+The optional receiver also accepts agent-bus messages with a separate signing key.
+The deferred `agent_bus_listen` tool binds a recipient name to the current Pi session.
+Signed messages wake an idle session or queue a follow-up behind active work.
+Closed sessions retain messages until resume. No Parallel request is needed for bus delivery.
+See [Agent-bus messages](docs/webhook-integration.md#agent-bus-messages) for configuration and delivery limits.
+
 ## Limits
 
-- Exactly three model tools. No vendor actions, remote IDs, processor names, or transport controls in their schemas.
+- Three directly exposed tools retain simple schemas. The additional `webtasks_submit` tool exposes SDK Task options through codemode only.
 - Default effort is `low`, with no automatic escalation.
 - User-selected discovery tiers are fast/basic/advanced. Deep tiers are core/pro/ultra2x.
 - Responses keeps low/medium/high. URL reading and entity lookup reject explicit effort.
 - Saved tier evidence does not establish universal quality or latency ordering.
 - Native Fast Entity Search is included. New async FindAll create, extend, and enrich workflows are excluded.
-- Caller-defined output schemas remain an explicit contract decision.
+- Caller-defined Task output schemas are available through `webtasks_submit`.
+- SDK processors outside the ordinary tiers mark the estimated status subtotal with `+?` for an unknown additional amount.
 - Result retrieval does not generate a missing alternative format.
 - Complete redacted evidence stays on disk even if previews omit content.
 - Paid submissions never retry automatically after uncertain acceptance.

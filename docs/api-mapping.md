@@ -1,7 +1,7 @@
 # Research interface mapping
 
-Status: contract review draft. Implementation is in progress.
-This document describes the proposed replacement, not the current nine-tool baseline.
+Status: implemented interface with offline verification. Live acceptance remains separate.
+Three ordinary tools provide common workflows. A codemode-only tool provides advanced SDK Task submission.
 Installation, publication, and changes to the running receiver remain separate.
 
 ## Review summary
@@ -9,14 +9,14 @@ Installation, publication, and changes to the running receiver remain separate.
 - **Chosen workflows:** source discovery, page reading, synchronous people/company search, cited conversation, and background Task research.
 - **Intentional omissions:** monitoring, account administration, model-facing stream/poll controls, and arbitrary callback settings.
 - **Entity coverage:** native Fast Entity Search in `web_search`. No new async FindAll discovery, expansion, or enrichment.
-- **Open contract choice:** caller-defined strict JSON schema. Retrieving a result does not generate a different output format.
+- **Advanced Tasks:** `webtasks_submit` accepts caller-defined schemas and native Task options. Retrieving a result does not generate a different output format.
 - **Release checks:** cross-slice integration, real model navigation, and live provider SSE collection remain unverified.
 - **Completion transport:** outbound Task Group SSE with bounded polling fallback, run inside the owning session. Webhooks are optional.
 - **Deployment:** `deep_search` needs no public callback. The configured public callback URL still fails DNS resolution from this machine, which matters only for the optional webhook path.
 - **Effort:** user-confirmed policy. Default is `low`, with no automatic escalation.
 - **MCP:** an alternative, not an approved replacement. Its documented later-turn result retrieval does not establish automatic offline delivery.
 
-## Three tools
+## Three ordinary tools
 
 Each object rejects unknown fields. Semantic validation runs before paid requests.
 Blank strings, invalid URLs, invalid domains, and incompatible argument combinations are errors.
@@ -185,11 +185,26 @@ That uses the same processor/run price, not a second research submission.
 The receiver preserves the raw output and its citation basis.
 Readable rendering is local and must not trigger another paid request.
 
-The present three-schema proposal omits an arbitrary output-schema field.
-Thus it cannot yet promise caller-defined strict JSON plus prose.
-That capability needs an explicit creation-time contract decision, not a new retrieval action.
+The ordinary `deep_search` schema omits arbitrary output schemas.
+`webtasks_submit.task.task_spec` accepts a native schema at creation time, including JSON fields for both prose and structured data.
+The provider determines schema support. The local result reader preserves the returned format.
+
+## Advanced SDK Task submission
+
+`webtasks_submit` is callable through codemode, not directly declared as a fourth ordinary tool.
+It accepts `{ label, task, betas? }`, with one native SDK `RunInput` per call.
+The [advanced SDK guide](advanced-sdk.md) defines the fields and includes an example.
+Both `web_search` and `deep_search` point agents to that guide when ordinary tools cannot express the required Task options.
+
+Both submission tools share `submitTrackedTask` in `src/research.ts`.
+That helper owns intent-first persistence, group selection, reserved metadata, acceptance binding, and collector wake-up.
+It disables automatic submission retries and preserves uncertain outcomes.
+The existing stream, snapshot, inbox, artifact, and notification flow handles both tools.
+Search/Extract, FindAll, and Monitor workflows do not enter this helper.
 
 ## Meaningful option mapping
+
+The table describes the ordinary tools unless it explicitly names `webtasks_submit`.
 
 | Old option family | New treatment |
 | --- | --- |
@@ -200,21 +215,21 @@ That capability needs an explicit creation-time contract decision, not a new ret
 | Retrieval counts and excerpt/full-content limits | Internal existing limits. Extract requests full content. No new completeness claim beyond returned evidence. |
 | Cache age, cache fallback, fetch timeout | Internal existing defaults. No model-facing cache/transport knobs. |
 | Include/allow domains | Exposed as `domains`; translated to the appropriate source filter. |
-| Exclude/block domains, raw source policy, date/location filters | Omitted as hard controls. A brief can request context, but it does not guarantee these filters. |
+| Exclude/block domains, raw source policy, date/location filters | Ordinary tools omit hard controls. `webtasks_submit.task` accepts native source policy and location settings. |
 | Responses message roles and separate instructions | One `question` plus saved conversation context. No model-supplied system/developer message array. |
 | Responses format/stream/metadata | Internal answer format and non-streamed call initially. No arbitrary format or metadata control. |
 | `previous_response_id` | Derived from the local conversation reference. |
-| `previous_interaction_id` | Derived from a completed Task artifact when available. No public remote identity. |
-| Task processor and FindAll generator | Task processor derives from effort. Async FindAll generation is excluded from new work. |
-| Task input/task specification/output schema | Brief becomes Task input with an internal cited-report specification. Machine-enforced arbitrary schemas are omitted. |
+| `previous_interaction_id` | Ordinary follow-ups derive this from the completed parent. `webtasks_submit.task` accepts an explicit provider identity. |
+| Task processor and FindAll generator | Ordinary Task processor derives from effort. Advanced Tasks require an explicit processor. Async FindAll generation remains excluded. |
+| Task input/task specification/output schema | Ordinary briefs request a cited report. `webtasks_submit.task` accepts structured input and native input/output schemas. |
 | Query batches | Exposed by `deep_search.query` array. Group membership and transport are internal. |
 | `run_id`, `taskgroup_id`, `findall_id`, response/interaction IDs | Internal SQLite state and diagnostic artifacts. Normal results use local references. |
 | `wait_seconds`, polling and stream cursors | Removed from model calls. Deep submission returns without awaiting completion. The collector keeps its own stored cursor. |
 | `webhook_url`, webhook events and signing scheme | Optional deployment configuration. When set, runs carry the per-run subscription. No agent override. |
-| `enable_events` | No progress-stream workflow. Backend defaults can remain, but callers do not consume them. |
-| MCP configuration and tool allowlists | Omitted. No model-supplied endpoints or credential headers. |
-| Metadata/client-model/session identifiers | Derived internally where needed for correlation and diagnostics. |
-| Memory-scope keys | No public override. Do not equate a session's group with an isolated backend memory scope. |
+| `enable_events` | Advanced Tasks can enable provider progress recording. The extension still exposes only completion notifications. |
+| MCP configuration and tool allowlists | `webtasks_submit.task.mcp_servers` accepts native definitions. |
+| Metadata/client-model/session identifiers | Ownership fields stay internal. Advanced Tasks accept user metadata outside the reserved `webtasks_` prefix. |
+| Memory-scope keys | Advanced Tasks accept `memory_scope_key`. A session group does not imply backend memory isolation. |
 | FindAll conditions/match limits/exclude list | Async enumeration capabilities omitted by the narrower entity-search decision. |
 | FindAll preview/extend/enrich/cancel controls | Unmapped. No automatic expensive expansion or destructive cancellation. |
 | Monitor frequency/backfill/snapshot controls | Omitted because monitoring is excluded. |
@@ -266,7 +281,7 @@ session switch/reload
   -> reload known group from SQLite
 ```
 
-Only sessions that submit deep research get durable group associations.
+Only sessions that submit through `deep_search` or `webtasks_submit` get durable group associations.
 Normal submissions reuse the runtime cache instead of repeatedly querying or creating groups.
 Reference-only reads bypass group initialization.
 SQLite is the store (`webtasks.sqlite`), not a second database. Startup adds no session row; a group association exists only for a session that submits deep research.

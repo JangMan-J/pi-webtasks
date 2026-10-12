@@ -8,7 +8,7 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "files": ["src", "README.md", "docs/api-mapping.md", "docs/tool-reference.md", "docs/webhook-integration.md", "docs/effort-qualification.md", "docs/release-readiness.md"],
+  "files": ["src", "README.md", "docs/advanced-sdk.md", "docs/api-mapping.md", "docs/tool-reference.md", "docs/webhook-integration.md", "docs/effort-qualification.md", "docs/release-readiness.md"],
   "pi": {
     "extensions": ["./src/index.ts"]
   },
@@ -28,7 +28,7 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-coding-agent": ">=1.1.0",
     "typebox": "*"
   },
   "devDependencies": {

@@ -14,6 +14,7 @@ import { WebhookInbox, isTerminalResearch, type InboxEntry, type Registration, t
 import type { ResearchStatus } from "./research-types.ts";
 import { researchOutput } from "./results.ts";
 import { taskResultOnce, findallResultOnce, monitorEventGroupOnce, type CallOpts } from "./ops.ts";
+import { AGENT_BUS_EVENT, busResource, parseBusEvent } from "./agent-bus.ts";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 45_000;
 const WATCH_DEBOUNCE_MS = 250;
@@ -44,7 +45,7 @@ export const TASK_META = {
   group: "webtasks_group",
 } as const;
 
-export type ConsumerAction = "fetch" | "failure" | "action_required" | "no_change" | "unrecognized";
+export type ConsumerAction = "fetch" | "failure" | "action_required" | "no_change" | "unrecognized" | "notify";
 
 export type NormalizedEvent = {
   resource_id?: string;
@@ -104,6 +105,15 @@ export function normalizeEvent(event: unknown): NormalizedEvent {
   const data = asRecord(e.data);
   const run = asRecord(data.run);
   const nestedEvent = asRecord(data.event);
+
+  if (type === AGENT_BUS_EVENT) {
+    const bus = parseBusEvent(event);
+    return {
+      event_type: type, kind: "agent-bus",
+      resource_id: bus ? busResource(bus.data.agent) : undefined,
+      action: bus ? "notify" : "unrecognized",
+    };
+  }
 
   if (type === TASK_EVENT_TYPE) {
     const resource_id = firstOf(str(data.run_id), str(run.run_id));
@@ -293,6 +303,10 @@ async function processEntry(options: ProcessOptions, entry: InboxEntry, onLog: (
       .then(ok => { if (ok) onLog(`webhook event ${entry.webhook_id} not routed: ${error}`); return ok; });
   }
   if (entry.fetch_failed && !options.retryFailed) return false;
+  if (norm.action === "notify") {
+    // The payload is already in the durable inbox. No Parallel client or result fetch.
+    return claimHandled(inbox, entry, { resource_id: norm.resource_id, kind: norm.kind, event_type: norm.event_type }, false);
+  }
   if (norm.action === "no_change") {
     return claimHandled(inbox, entry, { resource_id: norm.resource_id, kind: norm.kind, event_type: norm.event_type }, true);
   }

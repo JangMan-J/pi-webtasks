@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { stripVTControlCharacters } from "node:util";
 import { WebhookInbox } from "../src/webhook-inbox.ts";
 import { setup, type Call } from "./helpers/test-host.ts";
 
@@ -37,20 +38,28 @@ const submissions = (calls: Call[]) => calls.filter(c => c.method === "POST");
 const posts = (calls: Call[], re: RegExp) => calls.filter(c => c.method === "POST" && re.test(c.path));
 async function store(dir: string) { return new WebhookInbox(dir); }
 
-test("exactly three tools with closed schemas and no backend vocabulary", async t => {
+test("three direct tools retain closed schemas and no backend vocabulary", async t => {
   const h = await setup(t, () => json({}));
-  assert.deepEqual([...h.tools.keys()].sort(), ["deep_search", "interactive_search", "web_search"]);
-  for (const tool of h.tools.values() as Iterable<any>) {
+  assert.deepEqual(h.activeTools().sort(), ["deep_search", "interactive_search", "web_search"]);
+  assert.equal(h.tools.get("webtasks_submit").exposure, "codemode");
+  assert.match(h.tools.get("web_search").promptGuidelines.join("\n"), /If a few searches have not found it, use deep_search/);
+  for (const name of ["web_search", "deep_search"]) {
+    const guidelines = h.tools.get(name).promptGuidelines.join("\n");
+    assert.match(guidelines, /advanced-sdk\.md/);
+    assert.match(guidelines, /use webtasks_submit through codemode/);
+  }
+  for (const name of h.activeTools()) {
+    const tool = h.tools.get(name);
     assert.equal(tool.parameters.additionalProperties, false);
     const surface = JSON.stringify([tool.description, tool.promptSnippet, tool.promptGuidelines, tool.parameters]);
     assert.doesNotMatch(surface, /processor|taskgroup|run_id|webhook|response_id|\b(base|core|pro|ultra)\b|parallel/i);
   }
 });
 
-test("the extension registers exactly three tools and no commands; the default store is under webtasks/", async t => {
+test("the extension activates three tools and no commands; the default store is under webtasks/", async t => {
   const h = await setup(t, () => json({}));
   await h.start();
-  assert.deepEqual([...h.tools.keys()].sort(), ["deep_search", "interactive_search", "web_search"]);
+  assert.deepEqual(h.activeTools().sort(), ["deep_search", "interactive_search", "web_search"]);
   assert.equal(h.commands.size, 0, "no commands are registered");
   assert.equal(existsSync(join(h.dir, "agent", "webtasks", "webtasks.sqlite")), true, "the default store is agent/webtasks/webtasks.sqlite");
   assert.equal(existsSync(join(h.dir, "agent", "parallelized")), false, "no legacy directory is created");
@@ -407,21 +416,54 @@ test("notifications use the persisted research status and hide the remote run ID
   const db = await store(dir);
   t.after(() => db.close());
   const now = Date.now();
-  for (const [id, status] of [["bbbbbbbb", "cancelled"], ["cccccccc", "action_required"]] as const) {
+  for (const [id, status] of [["bbbbbbbb", "cancelled"], ["cccccccc", "action_required"], ["dddddddd", "completed"]] as const) {
     const ref = `research_${id}-0000-0000-0000-000000000000`;
+    const artifact = join(h.dir, "deep-result.json");
+    if (status === "completed") await writeFile(artifact, JSON.stringify({
+      output: { content: "Answer", basis: [{ citations: [
+        { url: "https://example.org/one", title: "One" },
+        { url: "https://example.org/two", title: "Two" },
+        { url: "https://example.org/one", title: "One again" },
+      ] }] },
+    }));
     await db.createResearch({ reference: ref, session_id: "session-a", group_id: "tg_1", query: "q", effort: "low", status: "dispatching", artifact_dir: h.dir, created_at: now, updated_at: now });
     await db.acceptResearch(ref, `run_${id}`);
-    await db.updateResearch(ref, { status });
+    await db.updateResearch(ref, { status, ...(status === "completed" ? { artifact } : {}) });
     await db.put({ webhook_id: `wh_${id}`, event: {}, resource_id: `run_${id}`, kind: "task" });
-    await db.markHandled(`wh_${id}`, { resource_id: `run_${id}`, kind: "task", terminal_failure: true });
+    await db.markHandled(`wh_${id}`, { resource_id: `run_${id}`, kind: "task", terminal_failure: status !== "completed" });
   }
   await h.start();
   const details = h.entries.map(e => (e.data as any).status).sort();
-  assert.deepEqual(details, ["action_required", "cancelled"]);
+  assert.deepEqual(details, ["action_required", "cancelled", "completed"]);
   const text = h.sent.map(m => JSON.stringify(m.message)).join("\n");
   assert.match(text, /cancelled/);
   assert.doesNotMatch(text, /run_bbbbbbbb|run_cccccccc/);
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 0   0   2   0.03");
   assert.equal((await db.listHandledUnnotified()).length, 0);
+});
+
+test("Pi status slot carries received counts and pending deep work for Zentui", async t => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const base = deepHost();
+  const h = await setup(t, async call => {
+    if (call.path === "/v1/search") { await gate; return json(searchPayload); }
+    if (call.path === "/v1/responses") return responsesReply(call);
+    return base(call);
+  });
+  await h.start();
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 0   0   0   0");
+  const searching = h.call("web_search", { query: "alpha" });
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 0⠋   0   0   0⠋");
+  release();
+  await searching;
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 1   0   0   0");
+  await h.call("interactive_search", { question: "why?" });
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 1   1   0   0.01");
+  await h.call("deep_search", { query: "report" });
+  assert.equal(stripVTControlCharacters(h.statusWrites.at(-1)!.text!), " 1   1   0⠋   0.01⠋");
+  await h.stop();
+  assert.equal(h.statusWrites.at(-1)?.text, undefined);
 });
 
 test("a failure while recording a later brief keeps earlier references and sends nothing further", async t => {

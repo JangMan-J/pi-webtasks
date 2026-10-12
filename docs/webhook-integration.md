@@ -143,6 +143,47 @@ The public add-runs schema describes newly created IDs but does not explicitly g
 A live mixed-webhook batch is the deciding check for that association.
 A deployment on another account or route needs its own signed delivery check.
 
+## Agent-bus messages
+
+The receiver also accepts signed `agent_bus.message` events on `/agent-bus/webhook`.
+Set `WEBTASKS_AGENT_BUS_KEY` to a separate Standard Webhooks secret.
+An agent-bus-only receiver does not need `PARALLEL_WEBHOOK_KEY` or a Parallel API key.
+Research callbacks retain their own route and secret.
+Neither route accepts events from the other source.
+
+Bus state uses `<WEBTASKS_DIR>/agent-bus/webtasks.sqlite`.
+It reuses the durable inbox, worker, and session consumer, without mixing bus events into research storage.
+Old research-only runtimes cannot consume these events.
+The bus worker does not fetch results from Parallel.
+
+Configure an HTTPS callback in the bus server's `AGENT_BUS_WEBHOOKS` file.
+Use the same signing secret at both ends.
+The server starts new destinations at the current mailbox tail, so earlier messages remain available through MCP `inbox`.
+
+In the receiving Pi session, call the deferred `agent_bus_listen` tool:
+
+```json
+{ "agent": "my-agent" }
+```
+
+Use that exact recipient name for direct messages and the server callback entry.
+Use a unique name for each independent Pi session.
+The local binding persists across reload and resume.
+Another session cannot take an existing name.
+The tool creates the local binding only. It does not configure the server or register remote presence.
+
+The receiver saves callbacks before its HTTP acknowledgment.
+The consumer routes each message to its bound session.
+`pi.sendMessage` uses `deliverAs: "followUp"` and `triggerTurn: true`.
+An idle session resumes automatically. A busy session handles the message after current work.
+A closed session receives pending messages on resume. The receiver does not launch Pi processes.
+Unbound recipients remain pending until a session claims the name.
+Messages appear as agent messages, not human instructions.
+
+Retries use the same webhook ID. A repeated callback does not create another inbox entry.
+A crash between Pi delivery and local acknowledgment can still repeat a notification.
+This is not an exactly-once wake-up guarantee.
+
 ## Verification
 
 Run all offline checks:

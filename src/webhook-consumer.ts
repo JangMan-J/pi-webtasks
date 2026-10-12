@@ -16,6 +16,7 @@ import type { Parallel } from "parallel-web";
 import { WebhookInbox, reportedRunStatus, type ResourceKind } from "./webhook-inbox.ts";
 import type { ResearchRecord } from "./research-types.ts";
 import { processInbox } from "./webhook-worker.ts";
+import { parseBusEvent, type AgentBusEvent } from "./agent-bus.ts";
 
 export { normalizeEvent } from "./webhook-worker.ts";
 export type { ConsumerAction, NormalizedEvent } from "./webhook-worker.ts";
@@ -23,6 +24,7 @@ export type { ConsumerAction, NormalizedEvent } from "./webhook-worker.ts";
 const WATCH_DEBOUNCE_MS = 250;
 
 export type Delivery = {
+  bus?: AgentBusEvent["data"];
   webhook_id: string;
   resource_id: string;
   kind: ResourceKind;
@@ -161,6 +163,14 @@ export class WebhookConsumer {
       if (!entry.resource_id || !entry.kind) continue;
       const registration = await this.inbox.getRegistration(entry.resource_id);
       if (!registration || registration.session_id !== this.sessionId) continue;
+      if (entry.kind === "agent-bus") {
+        const event = parseBusEvent(entry.event);
+        if (event) deliveries.push({
+          webhook_id: entry.webhook_id, resource_id: entry.resource_id,
+          kind: "agent-bus", status: "done", bus: event.data,
+        });
+        continue;
+      }
       if (entry.kind === "task") {
         const status = reportedRunStatus(entry.event);
         const duplicate = status !== undefined && (inBatch.has(`${entry.resource_id}:${status}`) || await this.inbox.isRunStatusNotified(entry.resource_id, status));

@@ -13,6 +13,7 @@ while (!existsSync(resolve(packageDir, "package.json")) || JSON.parse(readFileSy
   if (parent === packageDir) throw new Error("Set PI_PACKAGE_DIR to the installed Pi package directory");
   packageDir = parent;
 }
+export { packageDir };
 export type SentMessage = { message: unknown; options: unknown };
 export type AppendedEntry = { customType: string; data: unknown };
 
@@ -46,7 +47,9 @@ export async function loadTools() {
   assert.equal(extension.commands.size, 0, "the extension registers no commands");
   // Providers the extension registered (queued until Pi binds the runtime; the harness never binds it).
   const nativeProviders = runtime.pendingNativeProviderRegistrations.map((registration: any) => registration.provider);
-  activeTools = [...extension.tools.keys()];
+  activeTools = [...extension.tools].filter(([, tool]: any) =>
+    tool.definition.exposure === undefined || ["direct", "model-only"].includes(tool.definition.exposure),
+  ).map(([name]: any) => name);
   const { buildSystemPromptSections } = await import(pathToFileURL(resolve(packageDir, "dist/core/system-prompt.js")).href);
   return {
     tools: new Map([...extension.tools].map(([name, tool]: any) => [name, tool.definition])),
@@ -80,7 +83,9 @@ export async function loadDirect() {
   const { default: extension } = await import(pathToFileURL(resolve(extensionDir, "src/index.ts")).href);
   extension(pi);
   assert.equal(commands.size, 0, "the extension registers no commands");
-  return { tools, commands, handlers, sent, entries, nativeProviders, activeTools: () => [...tools.keys()], buildSystemPromptSections: undefined };
+  return { tools, commands, handlers, sent, entries, nativeProviders, activeTools: () => [...tools].filter(([, tool]) =>
+    tool.exposure === undefined || ["direct", "model-only"].includes(tool.exposure),
+  ).map(([name]) => name), buildSystemPromptSections: undefined };
 }
 
 /**
@@ -131,9 +136,9 @@ export function registryFor(providers: any[], credentials: Record<string, HostCr
 
 export function context(cwd: string, confirm = async (_title: string, _body: string) => true, sessionId = "test-session") {
   return {
-    cwd, hasUI: true, model: { provider: "test", id: "context-control" },
+    cwd, hasUI: true, mode: "tui" as const, model: { provider: "test", id: "context-control" },
     sessionManager: { getSessionId: () => sessionId },
-    ui: { confirm, notify() {}, setStatus() {} },
+    ui: { confirm, notify() {}, setStatus(_key: string, _text: string | undefined) {} },
   };
 }
 
@@ -196,9 +201,11 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   async function instance(sessionId = options.sessionId ?? "session-a") {
     const loaded = (options.direct ? await loadDirect() : await loadTools()) as Awaited<ReturnType<typeof loadTools>>;
     const ctx = { ...context(dir, undefined, sessionId), modelRegistry: registryFor(loaded.nativeProviders, credentials) };
+    const statusWrites: { key: string; text: string | undefined }[] = [];
+    ctx.ui.setStatus = (key: string, text: string | undefined) => { statusWrites.push({ key, text }); };
     const progress: string[] = [];
     const self: any = {
-      ...loaded, ctx, progress, sessionId,
+      ...loaded, ctx, progress, statusWrites, sessionId,
       start: () => fire(loaded.handlers, "session_start", { type: "session_start", reason: "startup" }, ctx),
       stop: () => fire(loaded.handlers, "session_shutdown", { type: "session_shutdown" }, ctx),
       /** Raw tool result; throws what the tool throws. */

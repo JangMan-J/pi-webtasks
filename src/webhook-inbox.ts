@@ -55,9 +55,9 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve, join } from "node:path";
-import type { ConversationRecord, Effort, OutboundInput, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup } from "./research-types.ts";
+import type { ConversationRecord, ResearchEffort, OutboundInput, ResearchRecord, ResearchStatus, SearchActivity, SessionGroup } from "./research-types.ts";
 
-export type ResourceKind = "task" | "findall" | "monitor";
+export type ResourceKind = "task" | "findall" | "monitor" | "agent-bus";
 
 export type Registration = {
   resource_id: string;
@@ -230,7 +230,7 @@ function rowToRegistration(row: RegistrationRow): Registration {
 }
 
 const RESEARCH_STATUSES = new Set<ResearchStatus>(["dispatching", "pending", "completed", "failed", "cancelled", "action_required", "uncertain"]);
-const EFFORTS = new Set<Effort>(["low", "medium", "high"]);
+const EFFORTS = new Set<ResearchEffort>(["low", "medium", "high", "custom"]);
 const CONVERSATION_STATUSES = new Set<ConversationRecord["status"]>(["completed", "partial", "uncertain"]);
 const FROZEN_RESEARCH = new Set<ResearchStatus>(["completed", "failed", "cancelled"]);
 const IMMUTABLE_RESEARCH = ["reference", "session_id", "group_id", "query", "effort", "domains", "artifact_dir", "cwd", "created_at", "run_id", "parent"] as const;
@@ -285,7 +285,7 @@ function rowToResearch(row: ResearchRow): ResearchRecord {
     interaction_id: row.interaction_id ?? undefined,
     parent: row.parent ?? undefined,
     query: row.query,
-    effort: row.effort as Effort,
+    effort: row.effort as ResearchEffort,
     domains: decodeDomains(row.domains_json),
     status: row.status as ResearchStatus,
     artifact_dir: row.artifact_dir,

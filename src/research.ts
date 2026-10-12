@@ -5,6 +5,8 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { domainToASCII } from "node:url";
 import type Parallel from "parallel-web";
+import type { RunInput, TaskSpec } from "parallel-web/resources/task-run";
+import type { TaskGroupAddRunsParams } from "parallel-web/resources/task-group";
 import { extract, findall, formatError, responses, search } from "./ops.ts";
 import { ArtifactError, getPreviewLimit, researchOutput, researchReceipt, type Receipt } from "./results.ts";
 import { presentEvidence } from "./evidence.ts";
@@ -41,7 +43,7 @@ export const EFFORT_POLICY = {
   deep: { low: "core", medium: "pro", high: "ultra2x" },
 } as const satisfies Record<string, Record<Effort, string>>;
 export const DEFAULT_EFFORT: Effort = "low";
-const TASK_EVENTS = ["task_run.status"];
+const TASK_EVENTS: Array<"task_run.status"> = ["task_run.status"];
 const MAX_BRIEFS = 20;
 const MAX_GROUNDING_CHARS = 8_000;
 
@@ -285,7 +287,8 @@ export async function webSearch(ctx: CallContext, session: ResearchSession, rawA
     async raw => {
       const receipt = publicReceipt(raw);
       const output = await presentEvidence(receipt, args);
-      return { text: output.text, details: { artifact: receipt.artifact, ...(output.readableArtifact ? { readable_artifact: output.readableArtifact } : {}) } };
+      const data = await readJson(receipt.artifact);
+      return { text: output.text, details: { artifact: receipt.artifact, count: Array.isArray(data?.results) ? data.results.length : 0, ...(output.readableArtifact ? { readable_artifact: output.readableArtifact } : {}) } };
     });
 }
 
@@ -413,6 +416,12 @@ function citations(basis: unknown): string[] {
   return lines;
 }
 
+/** Count the same distinct source URLs shown in a saved report's Sources index. */
+export async function researchSourceCount(artifact: string): Promise<number> {
+  const data = await readJson(artifact);
+  return citations(researchBody(data)?.basis).length;
+}
+
 const NO_ANSWER = "The saved research has no readable answer content. Read the saved file directly.";
 
 async function savedResearchText(record: ResearchRecord, limit: number): Promise<{ answer: string; truncated: boolean; missing: boolean }> {
@@ -464,9 +473,40 @@ async function readResearch(ctx: CallContext, session: ResearchSession, ref: str
 
 type Outcome = { reference: string; state: "accepted" | "not_accepted" | "uncertain" | "not_submitted"; error?: string };
 
-async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: string, webhookUrl: string | undefined, brief: string, query: string, effort: Effort, domains: string[] | undefined, previousInteraction?: string, parent?: string): Promise<Outcome> {
+export type TrackedTask = {
+  label: string;
+  task: Omit<RunInput, "webhook">;
+  betas?: TaskGroupAddRunsParams["betas"];
+  defaultTaskSpec?: TaskSpec;
+  parent?: string;
+};
+
+/** Shared by ordinary research and SDK-native submissions. Callers never manage ownership or cursors. */
+export async function submitTrackedTask(ctx: CallContext, session: ResearchSession, submission: TrackedTask): Promise<Outcome> {
+  if (!submission.label.trim()) throw new Error("A task label is required");
+  if ("webhook" in submission.task) throw new Error("The extension owns the task webhook");
+  if (Object.keys(submission.task.metadata ?? {}).some(key => key.startsWith("webtasks_"))) {
+    throw new Error("Metadata keys starting with webtasks_ are reserved");
+  }
+  if (session.stopped) throw new Error("Session is stopping; research was not submitted");
+  const signal = combinedSignal(ctx, session);
+  signal.throwIfAborted();
+  const work = session.track(dispatchTask(session, ctx, submission, signal));
+  try {
+    return await work;
+  } finally {
+    session.config.onSubmitted?.();
+  }
+}
+
+async function dispatchTask(session: ResearchSession, ctx: CallContext, submission: TrackedTask, signal: AbortSignal): Promise<Outcome> {
   const store = await session.config.getStore();
   const client = await session.config.getClient();
+  signal.throwIfAborted();
+  const groupId = await session.ensureGroup();
+  const { task, label: query, parent } = submission;
+  const effort = task.processor === "core" ? "low" : task.processor === "pro" ? "medium" : task.processor === "ultra2x" ? "high" : "custom";
+  const domains = task.source_policy?.include_domains;
   const ref = `research_${randomUUID()}`;
   const now = Date.now();
   // Intent first: the record exists before any paid request.
@@ -480,20 +520,18 @@ async function dispatchOne(session: ResearchSession, ctx: CallContext, groupId: 
     await store.updateResearch(ref, { status, error: error.slice(0, 500), updated_at: Date.now(), ...extra }).catch(() => undefined);
     return { reference: ref, state: status === "failed" ? "not_accepted" : "uncertain", error };
   };
-  if (session.stopped) return fail("failed", "Session stopped before dispatch");
+  if (signal.aborted) return fail("failed", "Submission stopped before dispatch");
   let created: { run_ids?: unknown; event_cursor?: string | null };
   try {
     created = await client.taskGroup.addRuns(groupId, {
       inputs: [{
-        input: brief,
-        processor: EFFORT_POLICY.deep[effort],
-        ...(previousInteraction ? { previous_interaction_id: previousInteraction } : {}),
-        metadata: { webtasks_ref: ref, webtasks_session: session.sessionId, webtasks_group: groupId },
-        ...(webhookUrl ? { webhook: { url: webhookUrl, event_types: TASK_EVENTS } } : {}),
-        ...(domains ? { source_policy: { include_domains: domains } } : {}),
-      }] as never,
-      default_task_spec: { output_schema: { type: "text", description: "Cited research report" } } as never,
-    }, { maxRetries: 0, signal: session.signal });
+        ...task,
+        metadata: { ...task.metadata, webtasks_ref: ref, webtasks_session: session.sessionId, webtasks_group: groupId },
+        ...(session.config.webhookUrl ? { webhook: { url: session.config.webhookUrl, event_types: TASK_EVENTS } } : {}),
+      }],
+      ...(submission.defaultTaskSpec ? { default_task_spec: submission.defaultTaskSpec } : {}),
+      ...(submission.betas ? { betas: submission.betas } : {}),
+    }, { maxRetries: 0, signal });
   } catch (err) {
     return definiteRejection(err) ? fail("failed", formatError(err)) : fail("uncertain", formatError(err));
   }
@@ -550,27 +588,31 @@ export async function deepSearch(ctx: CallContext, session: ResearchSession, raw
     if (typeof interaction === "string" && interaction) previousInteraction = interaction;
     grounding = `\n\nEarlier research findings to build on (originally asked: ${prior.query}):\n${answer}`;
   }
-  const webhookUrl = session.config.webhookUrl;
   if (session.stopped) throw new Error("Session is stopping; research was not submitted");
   await session.config.getClient(); // credential problems surface before any setup
   const outcomes: Outcome[] = [];
   const work = session.track((async () => {
-    const groupId = await session.ensureGroup();
     for (const query of queries) {
       if (outcomes.length && outcomes.at(-1)!.state !== "accepted") { outcomes.push({ reference: "", state: "not_submitted" }); continue; }
       try {
-        outcomes.push(await dispatchOne(session, ctx, groupId, webhookUrl, query + grounding, query, effort, domains, previousInteraction, research));
+        outcomes.push(await submitTrackedTask(ctx, session, {
+          label: query,
+          task: {
+            input: query + grounding,
+            processor: EFFORT_POLICY.deep[effort],
+            ...(previousInteraction ? { previous_interaction_id: previousInteraction } : {}),
+            ...(domains ? { source_policy: { include_domains: domains } } : {}),
+          },
+          defaultTaskSpec: { output_schema: { type: "text", description: "Cited research report" } },
+          parent: research,
+        }));
       } catch (err) {
         // Keep earlier accepted references; the rest are not submitted.
         outcomes.push({ reference: "", state: "not_accepted", error: formatError(err) });
       }
     }
   })());
-  try {
-    await work;
-  } finally {
-    session.config.onSubmitted?.();
-  }
+  await work;
   const accepted = outcomes.filter(o => o.state === "accepted");
   const lines = outcomes.map((o, i) => o.state === "not_submitted"
     ? `- Brief ${i + 1}: not submitted (an earlier brief was not accepted)`

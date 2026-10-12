@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { WebhookInbox } from "./webhook-inbox.ts";
 import { WebhookWorker } from "./webhook-worker.ts";
 import { verifyWebhook, verifyWebhookLegacy } from "./webhook.ts";
+import { AGENT_BUS_EVENT, AGENT_BUS_PATH, parseBusEvent } from "./agent-bus.ts";
 
 /** Loopback only by default; tests pass `port: 0`. */
 export const DEFAULT_WEBHOOK_HOST = "127.0.0.1";
@@ -34,7 +35,10 @@ export type WebhookReceiverScheme = "standard" | "legacy";
 
 export async function startWebhookReceiver(options: {
   inbox: WebhookInbox;
-  secret: string | string[];
+  secret?: string | string[];
+  /** Separate key and route: a research signer cannot impersonate bus agents. */
+  agentBusSecret?: string;
+  agentBusInbox?: WebhookInbox;
   scheme?: WebhookReceiverScheme;
   port?: number;
   host?: string;
@@ -43,7 +47,9 @@ export async function startWebhookReceiver(options: {
   /** Called after the event is durable and the HTTP ack has been queued. Must not fetch. */
   onAccepted?: () => void;
 }): Promise<{ url: string; close: () => Promise<void> }> {
-  const secrets = usableSecrets(options.secret);
+  const secrets = options.secret === undefined ? [] : usableSecrets(options.secret);
+  const busSecrets = options.agentBusSecret === undefined ? [] : usableSecrets(options.agentBusSecret);
+  if (!secrets.length && !busSecrets.length) throw new Error("webhook secret is required");
   const scheme = options.scheme ?? DEFAULT_WEBHOOK_SCHEME;
   if (scheme !== "standard" && scheme !== "legacy") {
     throw new Error("invalid webhook scheme");
@@ -57,7 +63,7 @@ export async function startWebhookReceiver(options: {
     throw new Error("invalid webhook port");
   }
   const path = options.path ?? DEFAULT_WEBHOOK_PATH;
-  if (typeof path !== "string" || !path.startsWith("/") || /[?#\s]/.test(path)) {
+  if (typeof path !== "string" || !path.startsWith("/") || /[?#\s]/.test(path) || path === AGENT_BUS_PATH) {
     throw new Error("invalid webhook path");
   }
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
@@ -73,7 +79,17 @@ export async function startWebhookReceiver(options: {
     keepAliveTimeout: KEEP_ALIVE_MS,
     joinDuplicateHeaders: false,
   }, (req, res) => {
-    void handleRequest({ req, res, inbox, secrets, verify, path, maxBodyBytes, onAccepted: options.onAccepted }).catch(() => {
+    const bus = pathnameOf(req) === AGENT_BUS_PATH;
+    if (!(bus ? busSecrets : secrets).length) {
+      reply(res, 404, "not found");
+      req.resume();
+      return;
+    }
+    void handleRequest({
+      req, res, inbox: bus ? (options.agentBusInbox ?? inbox) : inbox, secrets: bus ? busSecrets : secrets,
+      verify: bus ? verifyWebhook : verify, path: bus ? AGENT_BUS_PATH : path,
+      maxBodyBytes, onAccepted: options.onAccepted, bus,
+    }).catch(() => {
       reply(res, 500, "unavailable");
     });
   });
@@ -187,8 +203,9 @@ async function handleRequest(input: {
   path: string;
   maxBodyBytes: number;
   onAccepted?: () => void;
+  bus: boolean;
 }): Promise<void> {
-  const { req, res, inbox, secrets, verify, path, maxBodyBytes, onAccepted } = input;
+  const { req, res, inbox, secrets, verify, path, maxBodyBytes, onAccepted, bus } = input;
   if (pathnameOf(req) !== path) {
     reply(res, 404, "not found");
     req.resume();
@@ -229,9 +246,13 @@ async function handleRequest(input: {
     reply(res, 400, "bad request");
     return;
   }
+  if (bus ? !parseBusEvent(parsed) : parsed.type === AGENT_BUS_EVENT) {
+    reply(res, 400, "bad request");
+    return;
+  }
 
   try {
-    await inbox.put({ webhook_id: header(req, "webhook-id"), event: parsed });
+    await inbox.put({ webhook_id: `${bus ? "bus:" : ""}${header(req, "webhook-id")}`, event: parsed });
   } catch {
     reply(res, 500, "unavailable");
     return;
@@ -285,15 +306,17 @@ function isDirectRun(): boolean {
 }
 
 function envConfig(env: NodeJS.ProcessEnv): {
-  secret: string;
+  secret?: string;
+  agentBusSecret?: string;
   scheme: WebhookReceiverScheme;
   port: number;
   path: string;
   dir: string;
 } {
-  const secret = env[WEBHOOK_SECRET_ENV];
-  if (typeof secret !== "string" || secret.trim().length === 0) {
-    throw new Error(`${WEBHOOK_SECRET_ENV} is required`);
+  const secret = env[WEBHOOK_SECRET_ENV]?.trim() || undefined;
+  const agentBusSecret = env.WEBTASKS_AGENT_BUS_KEY?.trim() || undefined;
+  if (!secret && !agentBusSecret) {
+    throw new Error(`${WEBHOOK_SECRET_ENV} or WEBTASKS_AGENT_BUS_KEY is required`);
   }
   const dir = env[WEBTASKS_DIR_ENV];
   if (typeof dir !== "string" || dir.trim().length === 0) {
@@ -310,11 +333,11 @@ function envConfig(env: NodeJS.ProcessEnv): {
   }
   const pathRaw = env[WEBHOOK_PATH_ENV];
   const path = pathRaw === undefined || pathRaw === "" ? DEFAULT_WEBHOOK_PATH : pathRaw;
-  return { secret, scheme: schemeRaw, port, path, dir };
+  return { secret, agentBusSecret, scheme: schemeRaw, port, path, dir };
 }
 
 async function cliMain(): Promise<void> {
-  const { secret, scheme, port, path, dir } = envConfig(process.env);
+  const { secret, agentBusSecret, scheme, port, path, dir } = envConfig(process.env);
   const inbox = new WebhookInbox(dir);
   await inbox.init();
   const { researchClient } = await import("./ops.ts");
@@ -324,12 +347,22 @@ async function cliMain(): Promise<void> {
     artifactDir: defaultResultsDir(),
     onLog: msg => process.stderr.write(`${msg}\n`),
   });
+  // A separate database keeps research-only runtimes from consuming new bus events.
+  const busInbox = agentBusSecret ? new WebhookInbox(join(dir, "agent-bus")) : undefined;
+  const busWorker = busInbox ? new WebhookWorker({
+    inbox: busInbox,
+    artifactDir: defaultResultsDir(),
+    getClient: async () => { throw new Error("agent-bus events never fetch research"); },
+    onLog: msg => process.stderr.write(`${msg}\n`),
+  }) : undefined;
   const receiver = await startWebhookReceiver({
-    inbox, secret, scheme, port, host: DEFAULT_WEBHOOK_HOST, path,
-    onAccepted: () => worker.kick(),
+    inbox, secret, agentBusSecret, agentBusInbox: busInbox, scheme, port, host: DEFAULT_WEBHOOK_HOST, path,
+    onAccepted: () => { worker.kick(); busWorker?.kick(); },
   });
   await worker.start();
-  process.stdout.write(`${receiver.url}\n`);
+  await busWorker?.start();
+  if (secret) process.stdout.write(`${receiver.url}\n`);
+  if (agentBusSecret) process.stdout.write(`${new URL(AGENT_BUS_PATH, receiver.url).href}\n`);
   await new Promise<void>(resolveWait => {
     let stopping = false;
     const stop = () => {
@@ -337,8 +370,10 @@ async function cliMain(): Promise<void> {
       stopping = true;
       void (async () => {
         await worker.stop();
+        await busWorker?.stop();
         await receiver.close();
         await inbox.close();
+        await busInbox?.close();
       })().finally(resolveWait);
     };
     process.once("SIGINT", stop);

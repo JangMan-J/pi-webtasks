@@ -9,6 +9,8 @@ export type ResearchStatus =
   | "uncertain";
 
 export type Effort = "low" | "medium" | "high";
+/** SDK processors outside the three ordinary tiers have no local price estimate. */
+export type ResearchEffort = Effort | "custom";
 
 /** Small terminal request log; full source text and payloads stay in artifact files. */
 export type SearchActivity = {
@@ -51,7 +53,7 @@ export type ResearchRecord = {
   /** Explicit local research node selected as the parent for this submission. */
   parent?: string;
   query: string;
-  effort: Effort;
+  effort: ResearchEffort;
   domains?: string[];
   status: ResearchStatus;
   artifact_dir: string;

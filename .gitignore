@@ -10,3 +10,6 @@ parallel.env
 
 # Fetched Parallel docs snapshot (scripts/snapshot-docs.mjs docs/parallel)
 docs/parallel/
+
+# Parked work in progress with no current function
+.scratch/

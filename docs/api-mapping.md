@@ -332,7 +332,7 @@ If later-turn retrieval replaces automatic notification as the desired outcome, 
 
 ## Source basis and deciding checks
 
-- `PLAN.md`: recovered intent, exclusions, evidence limits, and the outbound completion decision.
+- `.archive/PLAN.md` (git-ignored): recovered intent, exclusions, evidence limits, and the outbound completion decision.
 - Latest user decisions: lazy initialization, lookup-only startup, per-session runtime cache, and no extra database.
 - User-confirmed tier screenshot: discovery fast/basic/advanced, Responses low/medium/high, Tasks core/pro/ultra2x. No private screenshot data is stored here.
 - `src/ops.ts`: current research request construction and one-shot retrieval helpers.

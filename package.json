@@ -4,24 +4,34 @@
   "description": "Three web research tools with durable background completion for Pi.",
   "private": true,
   "type": "module",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "engines": {
     "node": ">=22.19.0"
   },
-  "files": ["src", "README.md", "docs/advanced-sdk.md", "docs/api-mapping.md", "docs/tool-reference.md", "docs/webhook-integration.md", "docs/effort-qualification.md", "docs/release-readiness.md"],
+  "files": [
+    "src",
+    "README.md",
+    "docs/advanced-sdk.md",
+    "docs/api-mapping.md",
+    "docs/tool-reference.md",
+    "docs/webhook-integration.md",
+    "docs/effort-qualification.md",
+    "docs/release-readiness.md"
+  ],
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "scripts": {
     "test": "node --test tests/*.test.ts",
-    "test:bench": "node --test bench/*.test.ts",
     "test:live": "node scripts/live-check.ts",
     "webtasks:receiver": "node src/webhook-receiver.ts",
     "typecheck": "tsc --noEmit",
-    "typecheck:bench": "tsc --ignoreConfig --types node --noEmit --target ES2023 --module NodeNext --moduleResolution NodeNext --allowImportingTsExtensions --skipLibCheck bench/*.ts",
     "check": "npm run typecheck && npm test",
-    "check:bench": "npm run typecheck:bench && npm run test:bench && node bench/curate.ts",
-    "check:all": "npm run check && npm run check:bench"
+    "docs:snapshot": "node scripts/snapshot-docs.mjs docs/parallel"
   },
   "dependencies": {
     "parallel-web": "1.3.3"

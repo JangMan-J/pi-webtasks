@@ -37,9 +37,8 @@ Controlled external responses support failure and recovery tests.
 Those tests do not establish live provider delivery or real model navigation.
 No paid research runs during the offline suite.
 
-The old nine-tool test files remain under `tests/legacy/`.
-Historical experiments remain under `bench/` and `docs/`.
-They do not establish acceptance of the three-tool interface.
+Retired experiments, benchmarks, handoff notes and the old nine-tool tests live in `.archive/` (git-ignored).
+`npm run docs:snapshot` refreshes the Parallel docs mirror into `docs/parallel/` (git-ignored).
 
 ## Credentials
 
@@ -175,14 +174,6 @@ Loading the extension starts no HTTP listener.
 
 A receiver installed from the earlier `pi-parallelized` checkout is not verified on this machine. Its location is absent under this account and may belong to another account. Changing files in this checkout does not update any running process.
 The [webhook guide](docs/webhook-integration.md) describes the optional configuration and recovery.
-
-## Agent-bus wake-ups
-
-The optional receiver also accepts agent-bus messages with a separate signing key.
-The deferred `agent_bus_listen` tool binds a recipient name to the current Pi session.
-Signed messages wake an idle session or queue a follow-up behind active work.
-Closed sessions retain messages until resume. No Parallel request is needed for bus delivery.
-See [Agent-bus messages](docs/webhook-integration.md#agent-bus-messages) for configuration and delivery limits.
 
 ## Limits
 

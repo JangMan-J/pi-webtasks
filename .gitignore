@@ -4,3 +4,9 @@ node_modules/
 .env
 .env.*
 parallel.env
+
+# Retired research, benchmarks, handoff notes
+.archive/
+
+# Fetched Parallel docs snapshot (scripts/snapshot-docs.mjs docs/parallel)
+docs/parallel/

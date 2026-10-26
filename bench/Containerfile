@@ -1,8 +1,0 @@
-ARG BASE=localhost/pi-parallel-smoke:20260920
-FROM ${BASE} AS common
-COPY npx /usr/local/bin/npx
-RUN chmod 755 /usr/local/bin/npx
-FROM common AS cli
-FROM common AS extension
-RUN rm -rf /opt/cli /opt/cli-source
-ENV PATH=/opt/ctx7/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

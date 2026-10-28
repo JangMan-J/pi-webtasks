@@ -5,8 +5,9 @@ import { fileURLToPath } from "node:url";
 /**
  * Loads key files adjacent to the extension (`<extension-root>/.env` and `<extension-root>/parallel.env`)
  * into process.env before any tool runs. Real environment variables always win; nothing here overrides a
- * set variable. Key files use the provider's own names (_PARALLEL_API_KEY, PARALLEL_WEBHOOK_KEY).
- * No Pi imports: safe for the standalone webhook receiver as well.
+ * set variable. The research key (_PARALLEL_API_KEY or PARALLEL_API_KEY) is held aside instead, so the
+ * environment and Pi's stored login both win over it; see `packageAdjacentKey`.
+ * No Pi imports: callable from a plain script as well.
  */
 
 /** Parse dotenv-style text. Supports blank lines, `#` comments, `export KEY=`, and quoted values. */
@@ -63,5 +64,5 @@ for (const name of [".env", "parallel.env"]) {
 
 /** The research key from the package-adjacent key file, if any. */
 export function packageAdjacentKey(): string | undefined {
-  return ["_PARALLEL_API_KEY", "PARALLEL_API_KEY"].map(name => packageKeys[name]?.trim()).find(Boolean) || undefined;
+  return [...KEY_NAMES].map(name => packageKeys[name]?.trim()).find(Boolean) || undefined;
 }

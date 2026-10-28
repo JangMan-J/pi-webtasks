@@ -157,7 +157,7 @@ export type Call = {
   beta: string | null;
 };
 
-export type HostOptions = { sessionId?: string; webhookDir?: string; webhookUrl?: string; direct?: boolean };
+export type HostOptions = { sessionId?: string; storeDir?: string; direct?: boolean };
 
 // Tests using this fixture must remain serial: HOME and fetch are process globals.
 export async function setup(t: TestContext, handler: (call: Call) => Response | Promise<Response>, options: HostOptions = {}) {
@@ -165,6 +165,7 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   const env = { ...process.env };
   const fetch = globalThis.fetch;
   const live: { stop(): Promise<unknown> }[] = [];
+  let callSeq = 0;
   t.after(async () => {
     for (const instance of live.splice(0)) await instance.stop().catch(() => undefined);
     globalThis.fetch = fetch;
@@ -177,9 +178,7 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   process.env._PARALLEL_API_KEY = "offline-only";
   // Never inherit an installed receiver's live inbox or callback defaults. Explicit empty
   // values also block an adjacent parallel.env from enabling them.
-  process.env.WEBTASKS_DIR = options.webhookDir ?? "";
-  process.env.WEBTASKS_WEBHOOK_URL = options.webhookUrl ?? "";
-  process.env.WEBTASKS_OUTPUT_FORMAT = "json";
+  process.env.WEBTASKS_DIR = options.storeDir ?? "";
   const calls: Call[] = [];
   // Shared across this host's instances, as one Pi auth.json is shared across a session's reloads.
   const credentials: Record<string, HostCredential | undefined> = {};
@@ -208,9 +207,9 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
       ...loaded, ctx, progress, statusWrites, sessionId,
       start: () => fire(loaded.handlers, "session_start", { type: "session_start", reason: "startup" }, ctx),
       stop: () => fire(loaded.handlers, "session_shutdown", { type: "session_shutdown" }, ctx),
-      /** Raw tool result; throws what the tool throws. */
+      /** Raw tool result; throws what the tool throws. Each call gets a fresh Pi tool-call id. */
       run: (name: string, args: Record<string, unknown>, signal?: AbortSignal) =>
-        loaded.tools.get(name).execute("test", args, signal, (u: unknown) => { progress.push(JSON.stringify(u)); }, ctx),
+        loaded.tools.get(name).execute(`call-${++callSeq}`, args, signal, (u: unknown) => { progress.push(JSON.stringify(u)); }, ctx),
       call: async (name: string, args: Record<string, unknown>, signal?: AbortSignal) => {
         const result = await self.run(name, args, signal);
         return { text: textOf(result), details: result.details };
@@ -222,7 +221,6 @@ export async function setup(t: TestContext, handler: (call: Call) => Response | 
   const first = await instance();
   return {
     dir, calls, instance, credentials, ...first,
-    artifacts: resolve(dir, "agent/webtasks/results"),
-    inboxDir: options.webhookDir ?? resolve(dir, "agent/webtasks"),
+    inboxDir: options.storeDir ?? resolve(dir, "agent/webtasks"),
   };
 }

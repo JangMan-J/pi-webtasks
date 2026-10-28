@@ -49,7 +49,8 @@ export function parallelProvider(options: BrowserLoginOptions = {}): Provider {
         async resolve({ ctx, credential }) {
           const stored = credential?.type === "api_key" ? credential.key?.trim() : undefined;
           if (stored) return { auth: { apiKey: stored }, source: "stored credential" };
-          const fromEnv = ((await ctx.env("_PARALLEL_API_KEY")) ?? (await ctx.env("PARALLEL_API_KEY")))?.trim();
+          // Same rule as resolveResearchKey: an empty or blank variable falls through to the next one.
+          const fromEnv = (await ctx.env("_PARALLEL_API_KEY"))?.trim() || (await ctx.env("PARALLEL_API_KEY"))?.trim();
           return fromEnv ? { auth: { apiKey: fromEnv }, source: "environment" } : undefined;
         },
       },

@@ -1,7 +1,7 @@
 {
   "name": "pi-webtasks",
   "version": "0.1.0",
-  "description": "Three web research tools with durable background completion for Pi.",
+  "description": "Session-bound web research tools with a local evidence store for Pi.",
   "private": true,
   "type": "module",
   "keywords": [
@@ -12,13 +12,7 @@
   },
   "files": [
     "src",
-    "README.md",
-    "docs/advanced-sdk.md",
-    "docs/api-mapping.md",
-    "docs/tool-reference.md",
-    "docs/webhook-integration.md",
-    "docs/effort-qualification.md",
-    "docs/release-readiness.md"
+    "README.md"
   ],
   "pi": {
     "extensions": [
@@ -27,8 +21,6 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.ts",
-    "test:live": "node scripts/live-check.ts",
-    "webtasks:receiver": "node src/webhook-receiver.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm test",
     "docs:snapshot": "node scripts/snapshot-docs.mjs docs/parallel"

@@ -332,18 +332,19 @@ test("secrets never appear in notifications, console output, or errors", async (
 });
 
 test("the browser-stored key is used by tool calls, at call time", async t => {
-  const h = await setup(t, () => json(searchPayload));
+  let n = 0;
+  const h = await setup(t, () => json({ ...searchPayload, search_id: `search_${++n}` }));
   delete process.env._PARALLEL_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   h.credentials.parallel = { type: "oauth", access: "first-browser-key", refresh: "", expires: Number.MAX_SAFE_INTEGER };
   await h.start();
-  await h.call("web_search", { query: "alpha fact" });
+  await h.call("web_search", { search_queries: ["alpha fact"] });
   assert.equal(keyOf(h.calls.at(-1)!), "first-browser-key");
   h.credentials.parallel = { type: "api_key", key: "second-pasted-key" };
-  await h.call("web_search", { query: "alpha fact" });
+  await h.call("web_search", { search_queries: ["alpha fact"] });
   assert.equal(keyOf(h.calls.at(-1)!), "second-pasted-key", "a pasted key still resolves, and the change applies at the next call");
   h.credentials.parallel = undefined;
-  await assert.rejects(h.call("web_search", { query: "alpha fact" }), /\/login/);
+  await assert.rejects(h.call("web_search", { search_queries: ["alpha fact"] }), /\/login/);
   assert.equal(h.calls.length, 2, "after a logout no request is made with the old key");
 });
 

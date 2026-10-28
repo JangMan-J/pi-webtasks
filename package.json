@@ -41,7 +41,7 @@
     "bootstrap:npm": "bash scripts/npm-bootstrap.sh"
   },
   "dependencies": {
-    "parallel-web": "1.3.3"
+    "parallel-web": "1.3.6"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

@@ -8,6 +8,7 @@
  */
 
 import type { EvidenceKind, EvidenceOrigin, ResearchStore } from "./store.ts";
+import type { AlertDelivery } from "./alert-delivery.ts";
 
 export type RecallInput = {
   /** Read one stored item, starting at `offset`. */
@@ -29,7 +30,12 @@ export type RecallResult = { text: string; details: Record<string, unknown> };
 const RECEIPT_LIMIT = 4200;
 const SNIPPET_PREVIEW = 240;
 
-type Options = { store: ResearchStore; sessionId: string };
+type Options = {
+  store: ResearchStore;
+  sessionId: string;
+  /** Told when the agent reads a run, which is proof its alerts were received. */
+  alerts: Pick<AlertDelivery, "received">;
+};
 
 function clamp(value: number | undefined, fallback: number, min: number, max: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback;
@@ -64,7 +70,7 @@ function bounded(lines: string[], footer: string[], limit: number): string {
   return [...kept, note, ...footer].filter((line): line is string => line !== undefined).join("\n");
 }
 
-export function createRecallService({ store, sessionId }: Options) {
+export function createRecallService({ store, sessionId, alerts }: Options) {
   async function recall(input: RecallInput): Promise<RecallResult> {
     const hasHandle = typeof input.handle === "string" && input.handle.trim() !== "";
     const hasCursor = typeof input.cursor === "string" && input.cursor.trim() !== "";
@@ -78,7 +84,7 @@ export function createRecallService({ store, sessionId }: Options) {
       const limit = clamp(input.max_chars, 4000, 500, 8000);
       const slice = await store.readEvidence(sessionId, input.handle!.trim(), { offset: input.offset ?? 0, limit });
       // Reading a run's evidence is evidence of receipt: its alerts no longer need re-delivery.
-      await store.acknowledgeRunAlerts(sessionId, slice.reference).catch(() => undefined);
+      await alerts.received(slice.reference);
       const lines = [
         `${slice.handle} — ${slice.kind}, ${originLabel(slice.origin)}${slice.title ? `: ${slice.title}` : ""}`,
         slice.url ? `URL: ${slice.url}` : undefined,
@@ -115,7 +121,7 @@ export function createRecallService({ store, sessionId }: Options) {
       limit,
       cursor: hasCursor ? input.cursor!.trim() : undefined,
     });
-    if (input.reference?.trim()) await store.acknowledgeRunAlerts(sessionId, input.reference.trim()).catch(() => undefined);
+    if (input.reference?.trim()) await alerts.received(input.reference.trim());
     if (!page.hits.length) {
       return {
         text: [

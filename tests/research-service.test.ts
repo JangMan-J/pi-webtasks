@@ -7,6 +7,7 @@ import type { ExtractParams, ExtractResponse, SearchParams, SearchResult } from 
 import { ResearchStore } from "../src/store.ts";
 import { createResearchService, type ResearchClient } from "../src/research-service.ts";
 import { createRecallService } from "../src/recall.ts";
+import { createAlertDelivery } from "../src/alert-delivery.ts";
 
 type Call = { kind: "search" | "extract"; body: SearchParams | ExtractParams; options: { signal?: AbortSignal; maxRetries?: number; timeout?: number } | undefined };
 
@@ -46,8 +47,8 @@ async function harness(t: import("node:test").TestContext, handlers: Parameters<
   t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
   const { client, calls } = fakeClient(handlers);
   const service = createResearchService({ store, sessionId: "s1", client: async () => client, clientModel: "test/model" });
-  const recall = createRecallService({ store, sessionId: "s1" });
-  const recallOther = createRecallService({ store, sessionId: "s2" });
+  const recall = createRecallService({ store, sessionId: "s1", alerts: createAlertDelivery({ store, sessionId: "s1", deliver: () => undefined }) });
+  const recallOther = createRecallService({ store, sessionId: "s2", alerts: createAlertDelivery({ store, sessionId: "s2", deliver: () => undefined }) });
   return { dir, store, service, recall, recallOther, calls };
 }
 

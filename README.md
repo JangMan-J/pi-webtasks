@@ -6,6 +6,14 @@ The extension owns transport, storage, indexing, recovery, and delivery. The mod
 owns the research work: what to search, what to read, and what to ask. Nothing
 exposes SQL, provider ids, file paths, or raw HTTP.
 
+## Install
+
+```sh
+pi install npm:pi-webtasks
+```
+
+Then run `/login` in Pi and choose **Parallel** (see [Credentials](#credentials)).
+
 ## Status
 
 Five tools:
@@ -87,6 +95,37 @@ runtime tests.
 
 `node scripts/extract-tool-schemas.ts <dir>` dumps the registered tools exactly
 as the model sees them.
+
+`npm run smoke:pack` packs the package, installs the tarball into a scratch
+project, and loads it through Pi's real extension loader.
+
+CI (`.github/workflows/ci.yml`) runs the type checker, the suite, and the pack
+smoke test on Node 22.19 (the engines floor), 24, and 26, plus Pi 1.1.0 (the
+peer floor).
+
+## Releasing
+
+Releases publish from GitHub Actions through npm trusted publishing (OIDC), so
+no npm token is stored anywhere and every version carries a provenance
+attestation.
+
+```sh
+npm version patch        # or minor / major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags   # the tag runs .github/workflows/publish.yml
+```
+
+The publish workflow reruns CI, refuses a tag that does not match
+`package.json`, publishes, and creates the GitHub release.
+
+One-time setup:
+
+1. Publish the first version by hand, because npm attaches a trusted publisher
+   only to a package that exists: `npm login`, then `npm publish`.
+2. On npmjs.com, open the package's **Settings > Trusted publishing**. Add GitHub
+   Actions with user `JangMan-J`, repository `pi-webtasks`, workflow
+   `publish.yml`, and environment `npm`.
+3. Optional but recommended: under **Publishing access**, choose *Require
+   two-factor authentication and disallow tokens*.
 
 Retired experiments, benchmarks, and the pre-rewrite implementation live in
 `.archive/` (git-ignored). `npm run docs:snapshot` refreshes the Parallel docs

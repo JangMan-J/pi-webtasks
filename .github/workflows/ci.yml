@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Node ${{ matrix.node }} / Pi ${{ matrix.pi }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22.19.0 is the engines floor; Pi "locked" is the version in package-lock.json,
+        # and 1.1.0 is the peer-dependency floor.
+        node: ["22.19.0", "24", "26"]
+        pi: [locked]
+        include:
+          - node: "24"
+            pi: "1.1.0"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Use the minimum supported Pi
+        if: matrix.pi != 'locked'
+        run: npm install --no-save @earendil-works/pi-ai@${{ matrix.pi }} @earendil-works/pi-coding-agent@${{ matrix.pi }}
+      - run: npm run typecheck
+      - run: npm test
+      - name: Check the package contents
+        run: npm pack --dry-run
+      - name: Install the packed tarball and load it in Pi
+        run: npm run smoke:pack

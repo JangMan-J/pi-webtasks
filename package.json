@@ -1,6 +1,6 @@
 {
   "name": "pi-webtasks",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Session-bound web research tools with a local evidence store for Pi.",
   "license": "MIT",
   "author": "JangMan-J",

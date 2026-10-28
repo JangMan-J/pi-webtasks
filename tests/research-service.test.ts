@@ -142,7 +142,7 @@ test("a replayed invocation returns stored evidence instead of paying twice", as
   assert.equal(h.calls.length, 1, "the provider is called exactly once");
   assert.equal(replay.details.replayed, true);
   assert.equal(replay.details.reference, first.details.reference);
-  assert.match(replay.text, /already ran as run_\w+ .*it is not sent again/)
+  assert.match(replay.text, /This search call was already sent as run_\w+ .*it is not sent again/)
   assert.match(replay.text, /not sent again/);
   assert.match(replay.text, /ev_[0-9a-f]{16}/, "the replay still surfaces readable handles");
   assert.equal((await h.store.listRuns("s1")).length, 1);
@@ -189,6 +189,8 @@ test("extract stores per-URL content and reports failures without inventing evid
   assert.match(receipt.text, /http_error \(HTTP 404\)/);
   assert.match(receipt.text, /no content was returned/);
   assert.equal(receipt.details.saved, 1, "only the URL with content becomes evidence");
+  assert.match(receipt.text, /Empty page — https:\/\/example\.org\/empty \(0 chars stored\)\n  no content was returned/, "the empty URL gets no handle");
+  assert.match(receipt.text, /Alpha page — https:\/\/example\.org\/a \([\d,]+ chars stored\)\n  ev_[0-9a-f]{16}: /, "the handle sits under the URL it was read from");
 
   const stored = await h.recall.recall({ query: "complete alpha body" });
   assert.match(stored.text, /ev_[0-9a-f]{16}/);
@@ -214,7 +216,7 @@ test("receipts stay bounded even with many long sources", async t => {
   });
   const receipt = await h.service.search({ search_queries: ["bounded"] }, { invocationId: "call-1" });
   assert.ok(receipt.text.length <= 4300, `receipt must stay bounded, got ${receipt.text.length}`);
-  assert.match(receipt.text, /omitted from this receipt/);
+  assert.match(receipt.text, /further lines omitted; the sources are all stored and searchable/);
   assert.match(receipt.text, /all stored and searchable/);
   assert.equal(receipt.details.saved, 20, "every source is stored even when the receipt truncates");
 

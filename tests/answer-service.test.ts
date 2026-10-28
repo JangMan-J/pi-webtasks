@@ -97,7 +97,7 @@ test("a replayed invocation returns the stored answer instead of asking again", 
   assert.equal(h.calls.length, 1);
   assert.equal(replay.details.replayed, true);
   assert.equal(replay.details.reference, first.details.reference);
-  assert.match(replay.text, /already asked as run_\w+ .*it is not sent again/);
+  assert.match(replay.text, /This question was already sent as run_\w+ .*it is not sent again/);
   assert.match(replay.text, /The answer is 42/);
 });
 
@@ -133,6 +133,7 @@ test("input validation happens before any paid request", async t => {
   const h = await harness(t);
   await assert.rejects(() => h.service.answer({ question: "   " }, { invocationId: "call-1" }), /non-empty string/);
   await assert.rejects(() => h.service.answer({ question: "q", effort: "max" as never }, { invocationId: "call-2" }), /low, medium, or high/);
+  await assert.rejects(() => h.service.answer({ question: "q", include_domains: ["https://example.org"] }, { invocationId: "call-3" }), /is not a bare domain/);
   assert.equal(h.calls.length, 0);
   assert.deepEqual(await h.store.listRuns("s1"), []);
 });

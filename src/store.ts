@@ -153,6 +153,9 @@ export type EvidenceInput = {
   created_at?: number;
 };
 
+/** One evidence item a completion stored: its new handle and where it came from. Returned in input order. */
+export type StoredEvidence = { handle: string; kind: EvidenceKind; title?: string; url?: string; pointer?: string };
+
 export type CitationInput = {
   /** Stored evidence handle, or a batch alias from this completion's evidence. */
   evidence: string;
@@ -1056,7 +1059,7 @@ export class ResearchStore {
     providerInteractionId?: string;
     /** Untouched provider result object, stored verbatim for later re-reading. */
     rawResult?: unknown;
-  }): Promise<{ changed: boolean; evidence: { handle: string; kind: EvidenceKind; title?: string }[]; alertIds: string[] }> {
+  }): Promise<{ changed: boolean; evidence: StoredEvidence[]; alertIds: string[] }> {
     await this.connect();
     const now = this.now();
     return this.tx(() => {
@@ -1069,7 +1072,7 @@ export class ResearchStore {
         throw new StoreError("invalid", "A completed run needs evidence or a provider payload");
       }
 
-      const handles: { id: number; handle: string; kind: EvidenceKind; title?: string }[] = [];
+      const handles: (StoredEvidence & { id: number })[] = [];
       const aliases = new Map<string, number>();
       for (const item of input.evidence ?? []) {
         const stored = this.insertEvidence(input.sessionId, input.reference, item, now);
@@ -1077,7 +1080,7 @@ export class ResearchStore {
           if (aliases.has(item.ref)) throw new StoreError("invalid", `Duplicate evidence alias ${item.ref}`);
           aliases.set(item.ref, stored.id);
         }
-        handles.push({ ...stored, kind: item.kind, title: item.title });
+        handles.push({ ...stored, kind: item.kind, title: item.title, url: item.url, pointer: item.pointer });
       }
       const resolve = (handleOrAlias: string): number => aliases.get(handleOrAlias) ?? this.evidenceIdByHandle(input.sessionId, handleOrAlias);
       for (const citation of input.citations ?? []) {
@@ -1103,7 +1106,7 @@ export class ResearchStore {
       const alertIds = (input.alerts ?? []).map(alert => this.upsertAlert(input.sessionId, input.reference, alert, now));
       return {
         changed: true,
-        evidence: handles.map(({ handle, kind, title }) => ({ handle, kind, title })),
+        evidence: handles.map(({ id: _id, ...item }) => item),
         alertIds,
       };
     });

@@ -25,7 +25,8 @@
  * becomes evidence, and the wording of its receipt.
  */
 
-import type { CitationInput, EvidenceInput, EvidenceKind, ResearchStore, RunKind, RunRecord, SearchHit } from "./store.ts";
+import type { CitationInput, EvidenceInput, ResearchStore, RunKind, RunRecord, SearchHit, StoredEvidence } from "./store.ts";
+import { errorText } from "./receipt.ts";
 
 /** Upper bound for one synchronous paid request. */
 export const REQUEST_TIMEOUT_MS = 180_000;
@@ -50,12 +51,12 @@ export type Settlement = {
   rawResult: unknown;
 };
 
-export type PaidCall<C, R> = {
+export type PaidCall<C, R, I extends object = Record<string, unknown>> = {
   kind: RunKind;
   /** Names the call in errors: "Search", "Fetch", "Answer", "Research submission". */
   label: string;
-  /** The effective request, recorded before it is sent. */
-  intent: Record<string, unknown>;
+  /** The effective request, recorded before it is sent. A replay returns it as stored. */
+  intent: I;
   processor?: string;
   /** The Pi tool invocation: its id keys the record, its signal may abort the request. */
   invocation: { invocationId: string; signal?: AbortSignal };
@@ -67,12 +68,17 @@ export type PaidCall<C, R> = {
   uncertainAdvice?(reference: string): string;
 };
 
-export type PaidOutcome<R> =
+export type PaidOutcome<R, I extends object = Record<string, unknown>> =
   | {
     replayed: true;
     reference: string;
     /** The stored run; absent only if it vanished between the lookup and the read. */
     run?: RunRecord;
+    /**
+     * The intent the first invocation recorded, not the replay's arguments. A row
+     * written by an older release may lack fields: read each with a fallback.
+     */
+    intent?: Partial<I>;
     /** Evidence already stored for it, newest first. */
     hits: SearchHit[];
   }
@@ -80,8 +86,10 @@ export type PaidOutcome<R> =
     replayed: false;
     reference: string;
     response: R;
-    /** Handles of the evidence committed by `settle`, in the order given; empty for a hand-off. */
-    evidence: { handle: string; kind: EvidenceKind; title?: string }[];
+    /** What `settle` committed; absent for a hand-off. */
+    settlement?: Settlement;
+    /** The stored evidence, each with its new handle and its url and pointer, in the order `settle` gave; empty for a hand-off. */
+    evidence: StoredEvidence[];
   };
 
 /**
@@ -110,19 +118,7 @@ const MESSAGE_LIMIT = 500;
 
 /** The readable message of a failure, on one bounded line. */
 export function failureMessage(err: unknown): string {
-  let text: string;
-  if (err instanceof Error) text = err.message;
-  else if (typeof err === "string") text = err;
-  else {
-    const message = (err as { message?: unknown } | null | undefined)?.message;
-    try {
-      text = typeof message === "string" ? message : JSON.stringify(err) ?? String(err);
-    } catch {
-      text = String(err);
-    }
-  }
-  const flat = text.replace(/\s+/g, " ").trim() || "unknown error";
-  return flat.length <= MESSAGE_LIMIT ? flat : `${flat.slice(0, MESSAGE_LIMIT - 1)}…`;
+  return errorText(err, MESSAGE_LIMIT) ?? "unknown error";
 }
 
 function defaultAdvice(reference: string): string {
@@ -138,7 +134,7 @@ export function createPaidCalls<C>(options: { store: ResearchStore; sessionId: s
     await store.setRunState({ sessionId, reference, state, error }).catch(() => undefined);
   }
 
-  async function run<R>(call: PaidCall<C, R>): Promise<PaidOutcome<R>> {
+  async function run<R, I extends object = Record<string, unknown>>(call: PaidCall<C, R, I>): Promise<PaidOutcome<R, I>> {
     const begun = await store.beginRun({
       sessionId,
       intentKey: call.invocation.invocationId,
@@ -151,7 +147,8 @@ export function createPaidCalls<C>(options: { store: ResearchStore; sessionId: s
     if (!begun.created) {
       const stored = await store.run(sessionId, reference);
       const page = await store.search(sessionId, { reference, limit: REPLAY_HITS });
-      return { replayed: true, reference, run: stored, hits: page.hits };
+      const intent = stored?.intent && typeof stored.intent === "object" ? stored.intent as Partial<I> : undefined;
+      return { replayed: true, reference, run: stored, intent, hits: page.hits };
     }
 
     let client: C;
@@ -181,7 +178,7 @@ export function createPaidCalls<C>(options: { store: ResearchStore; sessionId: s
     try {
       const settlement = call.settle(response, reference);
       const completion = await store.completeRun({ sessionId, reference, state: "completed", ...settlement });
-      return { replayed: false, reference, response, evidence: completion.evidence };
+      return { replayed: false, reference, response, settlement, evidence: completion.evidence };
     } catch (err) {
       // The provider answered, so nothing here may claim the request failed outright,
       // unless the caller judged the response itself.

@@ -134,7 +134,7 @@ test("a replayed invocation does not buy a second run", async t => {
   assert.equal(h.calls.adds.length, 1, "exactly one paid submission");
   assert.equal(replay.details.replayed, true);
   assert.equal(replay.details.reference, first.details.reference);
-  assert.match(replay.text, /already submitted/);
+  assert.match(replay.text, /This research job was already sent as run_/);
   assert.match(replay.text, /not sent again/);
   assert.match(replay.text, /Contract: core; text report/);
 });
@@ -231,6 +231,10 @@ test("structured output requests a JSON schema instead of a text report", async 
   await assert.rejects(
     () => h.service.submit({ input: "x", output_schema: { type: "object" }, output_description: "text" }, { invocationId: "call-5" }),
     /not both/,
+  );
+  await assert.rejects(
+    () => h.service.submit({ input: "x", output_description: "text", exclude_domains: ["https://spam.example"] }, { invocationId: "call-6" }),
+    /is not a bare domain/,
   );
   assert.equal(h.calls.adds.length, before, "an unstated or doubled output contract never reaches the provider");
 });
@@ -375,4 +379,19 @@ test("a run stored as action_required is watched again at session start", async 
   assert.equal(resumed?.state, "pending", "Parallel reports it running again, so it runs locally too");
   assert.ok(h.calls.retries >= 1, "its status was read from Parallel");
   await h.service.stop();
+});
+
+test("a replay describes the submission it recorded, with defaults for fields an older row lacks", async t => {
+  const h = await harness(t);
+  const schema = { type: "object", properties: { verdict: { type: "string" } } };
+  await h.service.submit({ input: "x", output_schema: schema, processor: "pro", include_domains: ["docs.example"] }, { invocationId: "call-1" });
+  const replay = await h.service.submit({ input: "x", output_description: "other args", processor: "core" }, { invocationId: "call-1" });
+  assert.match(replay.text, /Contract: pro; JSON schema output; only docs\.example/, "the recorded request, not the replay's arguments");
+
+  // An older release recorded fewer fields.
+  await h.store.beginRun({ sessionId: "s1", intentKey: "call-old", intent: { kind: "task", input: "y" }, kind: "task", state: "submitting" });
+  const old = await h.service.submit({ input: "y", output_description: "findings", processor: "core2x" }, { invocationId: "call-old" });
+  assert.match(old.text, /This research job was already sent as run_\w+ \(state: submitting\)/);
+  assert.match(old.text, /Contract: core2x; text report/);
+  assert.equal(h.calls.adds.length, 1, "neither replay was sent");
 });

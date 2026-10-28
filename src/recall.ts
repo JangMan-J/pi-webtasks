@@ -9,6 +9,7 @@
 
 import type { EvidenceKind, EvidenceOrigin, ResearchStore } from "./store.ts";
 import type { AlertDelivery } from "./alert-delivery.ts";
+import { bounded, oneLine } from "./receipt.ts";
 
 export type RecallInput = {
   /** Read one stored item, starting at `offset`. */
@@ -27,8 +28,9 @@ export type RecallInput = {
 
 export type RecallResult = { text: string; details: Record<string, unknown> };
 
-const RECEIPT_LIMIT = 4200;
 const SNIPPET_PREVIEW = 240;
+/** What a recall receipt says about lines it had to leave out. */
+const OMITTED = "narrow the query or read an item by handle";
 
 type Options = {
   store: ResearchStore;
@@ -42,11 +44,6 @@ function clamp(value: number | undefined, fallback: number, min: number, max: nu
   return Math.min(max, Math.max(min, Math.trunc(value)));
 }
 
-function compact(text: string, limit = SNIPPET_PREVIEW): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length <= limit ? flat : `${flat.slice(0, limit).trimEnd()}…`;
-}
-
 function originLabel(origin: EvidenceOrigin): string {
   switch (origin) {
     case "provider_report": return "written by Parallel's research agent";
@@ -54,20 +51,6 @@ function originLabel(origin: EvidenceOrigin): string {
     case "provider_finding": return "interim finding from Parallel's research agent";
     case "provider_source": return "text from the source";
   }
-}
-
-function bounded(lines: string[], footer: string[], limit: number): string {
-  const kept: string[] = [];
-  let used = 0;
-  const footerText = footer.join("\n");
-  for (const line of lines) {
-    if (used + line.length + 1 > limit - footerText.length - 80) break;
-    kept.push(line);
-    used += line.length + 1;
-  }
-  const omitted = lines.length - kept.length;
-  const note = omitted > 0 ? `${omitted} further line${omitted === 1 ? "" : "s"} omitted; narrow the query or read an item by handle.` : undefined;
-  return [...kept, note, ...footer].filter((line): line is string => line !== undefined).join("\n");
 }
 
 export function createRecallService({ store, sessionId, alerts }: Options) {
@@ -139,7 +122,7 @@ export function createRecallService({ store, sessionId, alerts }: Options) {
     const lines = page.hits.map(hit => {
       const title = hit.title?.trim() || hit.url || hit.handle;
       const where = [hit.kind, originLabel(hit.origin)].join(", ");
-      const snippet = hit.snippet?.trim() ? compact(hit.snippet) : compact(hit.url ?? "");
+      const snippet = hit.snippet?.trim() ? oneLine(hit.snippet, SNIPPET_PREVIEW) : oneLine(hit.url ?? "", SNIPPET_PREVIEW);
       return [
         `- ${hit.handle} (${where}; ${hit.chars.toLocaleString("en-US")} chars) ${title}${hit.url && hit.url !== title ? ` — ${hit.url}` : ""}`,
         snippet ? `  "${snippet}"` : undefined,
@@ -151,7 +134,7 @@ export function createRecallService({ store, sessionId, alerts }: Options) {
     ];
     const more = page.next_cursor ? [`More results: web_recall { cursor: "${page.next_cursor}" }.`] : [];
     return {
-      text: bounded([header, ...lines], [...more, ...footer], RECEIPT_LIMIT),
+      text: bounded([header, ...lines], [...more, ...footer], { omitted: OMITTED }),
       details: {
         hits: page.hits.length,
         snapshot: page.snapshot,

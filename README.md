@@ -54,8 +54,10 @@ Alerts wake an idle session and queue behind a busy one; they never steer or
 interrupt active work. Progress updates follow one third of the lower published
 upper-latency estimate per processor (for example `core` every 1m40s). They are
 reminders to look, not deadlines or completion percentages. Completion, failure,
-and action-required alerts are immediate. A closed stream is never treated as
-completion: the provider's run status decides.
+and action-required alerts are immediate. A run that Parallel halts as
+`action_required` is alerted once and stays watched: progress alerts pause, and
+when it resumes or ends, that arrives as another alert. A closed stream is never
+treated as completion: the provider's run status decides.
 
 Alerts are persisted before delivery and delivered at-least-once: an alert stays
 unacknowledged until the agent reads that run, and a new runtime offers

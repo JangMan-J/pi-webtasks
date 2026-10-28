@@ -21,7 +21,8 @@
 
 import type { Parallel } from "parallel-web";
 import type { RunInput, TaskRun, TaskRunEventsResponse, TaskRunResult, TaskSpec } from "parallel-web/resources";
-import { OPEN_RUN_STATES, TERMINAL_RUN_STATES, UNCONFIRMED_RUN_STATES, type ResearchStore, type SearchHit } from "./store.ts";
+import { OPEN_RUN_STATES, TERMINAL_RUN_STATES, UNCONFIRMED_RUN_STATES, type ResearchStore } from "./store.ts";
+import { providerSourcePolicy, sourcePolicy } from "./source-policy.ts";
 import { createPaidCalls } from "./paid-call.ts";
 import {
   createTaskRunLifecycle,
@@ -31,7 +32,7 @@ import {
   type ProviderFact,
   type TaskProcessor,
 } from "./task-run-lifecycle.ts";
-import { clean, errorText, oneLine } from "./receipt.ts";
+import { clean, errorText, oneLine, replayReceipt } from "./receipt.ts";
 
 export const TASK_CEILING: TaskProcessor = "ultra2x";
 
@@ -58,6 +59,17 @@ export type ResearchInput = {
 };
 
 export type TaskReceipt = { text: string; details: Record<string, unknown> };
+
+/** The effective request a submission records before it is sent. */
+type TaskIntent = {
+  kind: "task";
+  input: string | Record<string, unknown>;
+  processor: TaskProcessor;
+  output_schema?: Record<string, unknown>;
+  output_description?: string;
+  source_policy?: { include_domains?: string[]; exclude_domains?: string[]; after_date?: string };
+  continue_from?: string;
+};
 
 type Options = {
   store: ResearchStore;
@@ -102,24 +114,17 @@ export function createTaskService(options: Options) {
   let sweep: ReturnType<typeof setInterval> | undefined;
   let stopping = false;
 
-  function receipt(reference: string, state: string, replayed: boolean, processor: string, kind: string, contract: string | undefined, hits: SearchHit[]): TaskReceipt {
-    const lines = replayed
-      ? [
-        `This research job was already submitted as ${reference} (state: ${state}); it is not sent again.`,
-        contract ? `Contract: ${contract}` : undefined,
-        hits.length ? `Stored evidence so far: ${hits.length} item(s).` : "No evidence is stored for it yet.",
-        ...hits.map(hit => `- ${hit.handle} (${hit.kind}) ${hit.title ?? hit.url ?? ""}`.trimEnd()),
-      ].filter((line): line is string => line !== undefined)
-      : [
-        `Research submitted: ${reference} (${processor}, ${kind}).`,
-        contract ? `Contract: ${contract}` : undefined,
-        "It runs in the background, and results usually take 5-15 minutes: progress updates and a completion alert arrive as messages, even after you end your turn.",
-        "Keep working on the other parts of the task meanwhile. When nothing else is left, tell the user the research is running and end your turn; the completion alert brings you back.",
-        `Read partial findings as they arrive with web_recall { reference: "${reference}" }. This job is submitted once; there is nothing to poll or resubmit.`,
-      ].filter((line): line is string => line !== undefined);
+  function receipt(reference: string, processor: string, kind: string, contract: string): TaskReceipt {
+    const lines = [
+      `Research submitted: ${reference} (${processor}, ${kind}).`,
+      `Contract: ${contract}`,
+      "It runs in the background, and results usually take 5-15 minutes: progress updates and a completion alert arrive as messages, even after you end your turn.",
+      "Keep working on the other parts of the task meanwhile. When nothing else is left, tell the user the research is running and end your turn; the completion alert brings you back.",
+      `Read partial findings as they arrive with web_recall { reference: "${reference}" }. This job is submitted once; there is nothing to poll or resubmit.`,
+    ];
     return {
       text: lines.join("\n"),
-      details: { reference, state, replayed, processor, hits: hits.length },
+      details: { reference, state: "submitted", replayed: false, processor, hits: 0 },
     };
   }
 
@@ -174,22 +179,6 @@ export function createTaskService(options: Options) {
     return { spec: { output_schema: { type: "text", description } }, kind: "cited text report", described: description };
   }
 
-  function sourcePolicy(input: ResearchInput) {
-    const include = (input.include_domains ?? []).map(domain => domain.trim()).filter(Boolean);
-    const exclude = (input.exclude_domains ?? []).map(domain => domain.trim()).filter(Boolean);
-    if (include.length + exclude.length > 200) throw new Error("include_domains and exclude_domains together take at most 200 entries");
-    const afterDate = clean(input.after_date);
-    if (afterDate && (!/^\d{4}-\d{2}-\d{2}$/.test(afterDate) || Number.isNaN(Date.parse(afterDate)))) {
-      throw new Error("after_date must be a calendar date in YYYY-MM-DD form");
-    }
-    if (!include.length && !exclude.length && !afterDate) return undefined;
-    return {
-      ...(afterDate ? { after_date: afterDate } : {}),
-      ...(include.length ? { include_domains: include } : {}),
-      ...(exclude.length ? { exclude_domains: exclude } : {}),
-    };
-  }
-
   async function submit(input: ResearchInput, call: { invocationId: string; signal?: AbortSignal }): Promise<TaskReceipt> {
     const raw = input.input;
     if (typeof raw === "string" ? !raw.trim() : !raw || typeof raw !== "object" || Array.isArray(raw) || !Object.keys(raw).length) {
@@ -198,10 +187,10 @@ export function createTaskService(options: Options) {
     const processor = validateProcessor(input.processor);
     const previousInteractionId = input.continue_from ? await continuationId(clean(input.continue_from)!) : undefined;
     const { spec: task_spec, kind, described } = taskSpec(input);
-    const source_policy = sourcePolicy(input);
+    const source_policy = providerSourcePolicy(sourcePolicy(input));
 
-    const intent = {
-      kind: "task" as const,
+    const intent: TaskIntent = {
+      kind: "task",
       input: raw,
       processor,
       output_schema: input.output_schema,
@@ -246,13 +235,14 @@ export function createTaskService(options: Options) {
     });
 
     if (outcome.replayed) {
-      const { reference, run, hits } = outcome;
       // Describe what was actually submitted, not the arguments of the replay.
-      const stored = run?.intent as { processor?: string; output_schema?: unknown; output_description?: string; source_policy?: Record<string, unknown>; continue_from?: string } | undefined;
-      const storedProcessor = stored?.processor ?? processor;
-      const storedKind = stored ? (stored.output_schema !== undefined ? "structured output" : "cited text report") : kind;
-      return receipt(reference, run?.state ?? "unknown", true, storedProcessor, storedKind,
-        contractLine(storedProcessor, storedKind, stored ? stored.output_description : described, stored?.source_policy, stored?.continue_from), hits);
+      const { reference, run, hits } = outcome;
+      const stored = outcome.intent ?? intent;
+      const storedProcessor = stored.processor ?? processor;
+      const storedKind = stored.output_schema !== undefined ? "structured output" : "cited text report";
+      const contract = contractLine(storedProcessor, storedKind, stored.output_description, stored.source_policy, stored.continue_from);
+      const { text, details } = replayReceipt({ noun: "research job", reference, state: run?.state ?? "unknown", hits, body: [`Contract: ${contract}`] });
+      return { text, details: { ...details, processor: storedProcessor } };
     }
     const { reference, response: { runId, parallel } } = outcome;
 
@@ -266,17 +256,17 @@ export function createTaskService(options: Options) {
 
     void track(reference);
     options.onAlerts();
-    return receipt(reference, "submitted", false, processor, kind, contractLine(processor, kind, described, source_policy, clean(input.continue_from)), []);
+    return receipt(reference, processor, kind, contractLine(processor, kind, described, source_policy, clean(input.continue_from)));
   }
 
   /** The effective request, stated plainly so the caller can see what it asked for. */
-  function contractLine(processor: string, kind: string, description: string | undefined, policy: Record<string, unknown> | undefined, continueFrom: string | undefined): string {
+  function contractLine(processor: string, kind: string, description: string | undefined, policy: TaskIntent["source_policy"], continueFrom: string | undefined): string {
     const parts = [processor, kind === "structured output" ? "JSON schema output" : `text report: "${oneLine(description ?? "", 100)}"`];
-    const include = (policy?.include_domains as string[] | undefined) ?? [];
-    const exclude = (policy?.exclude_domains as string[] | undefined) ?? [];
+    const include = policy?.include_domains ?? [];
+    const exclude = policy?.exclude_domains ?? [];
     if (include.length) parts.push(`only ${include.join(", ")}`);
     if (exclude.length) parts.push(`excluding ${exclude.join(", ")}`);
-    if (typeof policy?.after_date === "string") parts.push(`published after ${policy.after_date}`);
+    if (policy?.after_date) parts.push(`published after ${policy.after_date}`);
     if (continueFrom) parts.push(`continues ${continueFrom}`);
     return parts.join("; ");
   }

@@ -133,7 +133,7 @@ test("a replayed tool invocation does not pay twice", async t => {
   const a = await tool.execute("pi-call-1", args, undefined, undefined, h.ctx);
   const b = await tool.execute("pi-call-1", args, undefined, undefined, h.ctx);
   assert.equal(h.calls.length, 1, "one provider request for two executions of the same invocation");
-  assert.match(b.content[0].text, /already (ran|submitted) as run_/);
+  assert.match(b.content[0].text, /already sent as run_/);
   assert.match(a.content[0].text, /Searched/);
 });
 

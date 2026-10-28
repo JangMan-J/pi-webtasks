@@ -56,6 +56,8 @@ test("a call is recorded before it is sent, sent once without retries, and commi
   assert.equal(outcome.replayed, false);
   if (outcome.replayed) return;
   assert.equal(outcome.evidence.length, 1);
+  assert.deepEqual({ ...outcome.evidence[0], handle: "h" }, { handle: "h", kind: "excerpt", title: "Alpha", url: undefined, pointer: undefined }, "each handle comes back with where its evidence came from");
+  assert.equal(outcome.settlement?.summary, "alpha fact", "the outcome carries what was committed, so nothing is rebuilt from the response");
   assert.match((await h.store.readEvidence("s1", outcome.evidence[0]!.handle)).text, /alpha fact/);
   const run = await h.store.run("s1", outcome.reference);
   assert.equal(run?.state, "completed");

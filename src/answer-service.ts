@@ -3,12 +3,13 @@
  * continuation and stored evidence.
  *
  * The pinned SDK has no Responses resource, so this module issues the documented
- * raw request. It never retries: the request is paid, and the API has no
- * native background mode or retrieve-by-id, so an ambiguous outcome is recorded
- * as `uncertain` rather than repeated.
+ * raw request as a recorded paid call (`paid-call.ts`): never retried, because
+ * the API has no native background mode or retrieve-by-id, so an ambiguous
+ * outcome is recorded as `uncertain` rather than repeated.
  */
 
 import type { ResearchStore, EvidenceInput, CitationInput } from "./store.ts";
+import { createPaidCalls, UnusableResponse } from "./paid-call.ts";
 
 /** The part of the Parallel client the answer path needs. */
 export type AnswerClient = {
@@ -142,6 +143,8 @@ function bounded(text: string, limit = RECEIPT_LIMIT): { text: string; truncated
 }
 
 export function createAnswerService({ store, sessionId, client }: Options) {
+  const calls = createPaidCalls({ store, sessionId, client });
+
   async function continuationId(reference: string): Promise<string> {
     const run = await store.run(sessionId, reference);
     if (!run) throw new Error(`${reference} is not a research record in this session`);
@@ -169,22 +172,6 @@ export function createAnswerService({ store, sessionId, client }: Options) {
       exclude_domains: exclude,
       continue_from: clean(input.continue_from),
     };
-    const begun = await store.beginRun({ sessionId, intentKey: call.invocationId, intent, kind: "answer", state: "submitting" });
-    if (!begun.created) {
-      const run = await store.run(sessionId, begun.reference);
-      const page = await store.search(sessionId, { reference: begun.reference, limit: 10 });
-      const first = page.hits.find(hit => hit.kind === "report") ?? page.hits[0];
-      const body = first ? (await store.readEvidence(sessionId, first.handle, { limit: RECEIPT_LIMIT })).text : "";
-      return {
-        text: [
-          `This question was already asked as ${begun.reference} (state: ${run?.state ?? "unknown"}); it is not sent again.`,
-          body || `Read it with web_recall { reference: "${begun.reference}" }.`,
-        ].join("\n"),
-        details: { reference: begun.reference, state: run?.state, replayed: true, handle: first?.handle },
-      };
-    }
-    const reference = begun.reference;
-
     const body: Record<string, unknown> = {
       model: "parallel",
       input: question,
@@ -196,57 +183,48 @@ export function createAnswerService({ store, sessionId, client }: Options) {
         : {}),
     };
 
-    let response: Record<string, unknown>;
-    let parallel: AnswerClient;
-    try {
-      parallel = await client();
-    } catch (err) {
-      await store.setRunState({ sessionId, reference, state: "failed", error: err instanceof Error ? err.message : String(err) }).catch(() => undefined);
-      throw err;
-    }
-    try {
-      response = await parallel.post("/v1/responses", {
+    const outcome = await calls.run({
+      kind: "answer",
+      label: "Answer",
+      intent,
+      invocation: call,
+      uncertainAdvice: reference => `Its outcome is unknown (record ${reference}); ask again only if you still need the answer.`,
+      send: async (parallel, { options }) => await parallel.post("/v1/responses", {
         body,
         ...(parallel.apiKey ? { headers: { Authorization: `Bearer ${parallel.apiKey}` } } : {}),
-        maxRetries: 0,
-        timeout: 180_000,
-        signal: call.signal,
-      }) as Record<string, unknown>;
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      const message = err instanceof Error ? err.message : String(err);
-      const uncertain = typeof status === "number" ? status >= 500 || status === 408 : /Connection|Timeout|Abort|APIError/.test((err as { name?: string }).name ?? "");
-      await store.setRunState({ sessionId, reference, state: uncertain ? "uncertain" : "failed", error: message }).catch(() => undefined);
-      throw new Error(
-        `Answer did not complete: ${message}. ${uncertain
-          ? `Its outcome is unknown (record ${reference}); ask again only if you still need the answer.`
-          : `Record ${reference}.`}`,
-      );
-    }
-
-    const id = typeof response.id === "string" ? response.id : undefined;
-    if (!id) {
-      await store.setRunState({ sessionId, reference, state: "uncertain", error: "response carried no id" }).catch(() => undefined);
-      throw new Error(`The answer came back incomplete (record ${reference}); ask again if you still need it.`);
-    }
-    const text = answerText(response);
-    if (!text.trim()) {
-      await store.setRunState({ sessionId, reference, state: "failed", error: "response carried no answer text" }).catch(() => undefined);
-      throw new Error(`The answer came back empty (record ${reference}).`);
-    }
-
-    const { evidence, citations } = evidenceFromAnswer(text, annotations(response));
-    const completion = await store.completeRun({
-      sessionId,
-      reference,
-      state: "completed",
-      summary: oneLine(text, 120),
-      providerRunId: id,
-      rawResult: response,
-      evidence,
-      citations,
+        ...options,
+      }) as Record<string, unknown>,
+      settle: (response, reference) => {
+        const id = typeof response.id === "string" ? response.id : undefined;
+        if (!id) {
+          throw new UnusableResponse("uncertain", "response carried no id", `The answer came back incomplete (record ${reference}); ask again if you still need it.`);
+        }
+        const text = answerText(response);
+        if (!text.trim()) {
+          throw new UnusableResponse("failed", "response carried no answer text", `The answer came back empty (record ${reference}).`);
+        }
+        const { evidence, citations } = evidenceFromAnswer(text, annotations(response));
+        return { summary: oneLine(text, 120), providerRunId: id, rawResult: response, evidence, citations };
+      },
     });
-    const report = completion.evidence.find(item => item.kind === "report")?.handle;
+
+    if (outcome.replayed) {
+      const { reference, run, hits } = outcome;
+      const first = hits.find(hit => hit.kind === "report") ?? hits[0];
+      const stored = first ? (await store.readEvidence(sessionId, first.handle, { limit: RECEIPT_LIMIT })).text : "";
+      return {
+        text: [
+          `This question was already asked as ${reference} (state: ${run?.state ?? "unknown"}); it is not sent again.`,
+          stored || `Read it with web_recall { reference: "${reference}" }.`,
+        ].join("\n"),
+        details: { reference, state: run?.state, replayed: true, handle: first?.handle },
+      };
+    }
+
+    const { reference, response } = outcome;
+    const text = answerText(response);
+    const citations = evidenceFromAnswer(text, annotations(response)).citations;
+    const report = outcome.evidence.find(item => item.kind === "report")?.handle;
     const preview = bounded(text);
     return {
       text: [

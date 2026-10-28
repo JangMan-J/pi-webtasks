@@ -87,9 +87,15 @@ test("with no key from any source, the call fails with the /login hint before an
   const h = await setup(t, () => json(searchPayload));
   withoutEnvKeys();
   await h.start();
-  for (const [name, args] of [["web_search", { search_queries: ["alpha fact"] }], ["web_fetch", { urls: ["https://example.org/a"] }]] as const) {
+  const calls = [
+    ["web_search", { search_queries: ["alpha fact"] }],
+    ["web_fetch", { urls: ["https://example.org/a"] }],
+    ["web_answer", { question: "alpha?" }],
+    ["web_research", { input: "alpha", output_description: "findings" }],
+  ] as const;
+  for (const [name, args] of calls) {
     await assert.rejects(h.run(name, { ...args }), (err: any) =>
-      NO_KEY_HINT.test(err.message) && /_PARALLEL_API_KEY/.test(err.message), name);
+      NO_KEY_HINT.test(err.message) && /_PARALLEL_API_KEY/.test(err.message) && !/did not complete|may have started/.test(err.message), name);
   }
   assert.equal(h.calls.length, 0, "no request was made");
 });

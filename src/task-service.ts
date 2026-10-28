@@ -4,9 +4,10 @@
  *
  * Contracts this module owns:
  *
- *  - Intent before money: the local run record (with the effective request) is
- *    committed before the paid call, and a replayed Pi invocation returns that
- *    record instead of submitting again.
+ *  - Submission is a recorded paid call (`paid-call.ts`): the effective request
+ *    is recorded before money is spent, a replayed Pi invocation returns that
+ *    record instead of submitting again, and an accepted run is handed off to
+ *    collection.
  *  - Processor policy: `core` is the floor (`lite`/`base` are not offered for
  *    research) and `ultra2x` is the autonomous ceiling. A model-supplied
  *    argument is never treated as authorization for more.
@@ -23,7 +24,8 @@
 
 import type { Parallel } from "parallel-web";
 import type { FieldBasis, RunInput, TaskRun, TaskRunEventsResponse, TaskRunResult, TaskSpec } from "parallel-web/resources";
-import type { AlertInput, CitationInput, EvidenceInput, ResearchStore, RunState } from "./store.ts";
+import type { AlertInput, CitationInput, EvidenceInput, ResearchStore, RunState, SearchHit } from "./store.ts";
+import { createPaidCalls } from "./paid-call.ts";
 
 export const TASK_PROCESSORS = ["core", "core2x", "pro", "ultra", "ultra2x"] as const;
 export type TaskProcessor = (typeof TASK_PROCESSORS)[number];
@@ -247,6 +249,7 @@ export function createTaskService(options: Options) {
   const now = options.now ?? Date.now;
   const log = options.log ?? (() => undefined);
   const client = options.client;
+  const calls = createPaidCalls({ store, sessionId, client });
   const intervals = progressIntervals();
   const active = new Map<string, AbortController>();
   const collecting = new Set<Promise<void>>();
@@ -257,14 +260,13 @@ export function createTaskService(options: Options) {
   let stopping = false;
   let ticking = false;
 
-  async function receipt(reference: string, state: string, replayed: boolean, processor: string, kind: string, contract?: string): Promise<TaskReceipt> {
-    const existing = await store.search(sessionId, { reference, limit: 20 });
+  function receipt(reference: string, state: string, replayed: boolean, processor: string, kind: string, contract: string | undefined, hits: SearchHit[]): TaskReceipt {
     const lines = replayed
       ? [
         `This research job was already submitted as ${reference} (state: ${state}); it is not sent again.`,
         contract ? `Contract: ${contract}` : undefined,
-        existing.hits.length ? `Stored evidence so far: ${existing.hits.length} item(s).` : "No evidence is stored for it yet.",
-        ...existing.hits.map(hit => `- ${hit.handle} (${hit.kind}) ${hit.title ?? hit.url ?? ""}`.trimEnd()),
+        hits.length ? `Stored evidence so far: ${hits.length} item(s).` : "No evidence is stored for it yet.",
+        ...hits.map(hit => `- ${hit.handle} (${hit.kind}) ${hit.title ?? hit.url ?? ""}`.trimEnd()),
       ].filter((line): line is string => line !== undefined)
       : [
         `Research submitted: ${reference} (${processor}, ${kind}).`,
@@ -275,7 +277,7 @@ export function createTaskService(options: Options) {
       ].filter((line): line is string => line !== undefined);
     return {
       text: lines.join("\n"),
-      details: { reference, state, replayed, processor, hits: existing.hits.length },
+      details: { reference, state, replayed, processor, hits: hits.length },
     };
   }
 
@@ -287,12 +289,11 @@ export function createTaskService(options: Options) {
     return id;
   }
 
-  async function ensureGroup(): Promise<string> {
+  async function ensureGroup(parallel: Parallel): Promise<string> {
     const existing = await store.groupForSession(sessionId);
     if (existing?.group_id && existing.state === "ready") return existing.group_id;
     // Concurrent first submissions share one creation, so the session keeps one group.
     groupCreation ??= (async () => {
-      const parallel = await client();
       try {
         const group = await parallel.taskGroup.create({}, { maxRetries: 0 });
         await store.bindGroup(sessionId, group.taskgroup_id, "ready");
@@ -366,60 +367,56 @@ export function createTaskService(options: Options) {
       source_policy,
       continue_from: clean(input.continue_from),
     };
-    const begun = await store.beginRun({
-      sessionId, intentKey: call.invocationId, intent, kind: "task", processor, state: "submitting",
+    const outcome = await calls.run({
+      kind: "task",
+      label: "Research submission",
+      intent,
+      processor,
+      invocation: call,
+      // An accepted-but-unrecorded submission may exist: reconciliation finds it by its reference.
+      uncertainAdvice: reference => `It may have started anyway: ${reference} is being checked and reports its result if it did, so it needs no new submission.`,
+      send: async (parallel, { reference }) => {
+        const groupId = await ensureGroup(parallel);
+        const runInput: RunInput = {
+          input: raw,
+          processor,
+          enable_events: true,
+          task_spec,
+          metadata: { webtasks_ref: reference },
+          ...(source_policy ? { source_policy } : {}),
+          ...(previousInteractionId ? { previous_interaction_id: previousInteractionId } : {}),
+        };
+        const added = await parallel.taskGroup.addRuns(groupId, { inputs: [runInput], default_task_spec: task_spec }, { maxRetries: 0 });
+        const runId = added.run_ids?.[0];
+        if (!runId) throw new Error("Parallel accepted the job without returning a run");
+        try {
+          // Bind the accepted run before anything else can fail: from here on it exists and is paid for.
+          await store.bindProviderRun({ sessionId, reference, providerRunId: runId, groupId, state: "accepted" });
+          if (added.event_cursor) await store.setGroupCursor(sessionId, added.event_cursor);
+        } catch (err) {
+          // Accepted means the outcome can no longer be a rejection, whatever failed here:
+          // an error without an HTTP status is always settled as uncertain.
+          throw new Error(`Parallel accepted the job, but recording it failed: ${errorText(err) ?? "unknown error"}`, { cause: err });
+        }
+        return { runId, parallel };
+      },
+      // No settle: the accepted run is handed off to collection.
     });
-    if (!begun.created) {
-      const run = await store.run(sessionId, begun.reference);
+
+    if (outcome.replayed) {
+      const { reference, run, hits } = outcome;
       // Describe what was actually submitted, not the arguments of the replay.
       const stored = run?.intent as { processor?: string; output_schema?: unknown; output_description?: string; source_policy?: Record<string, unknown>; continue_from?: string } | undefined;
       const storedProcessor = stored?.processor ?? processor;
       const storedKind = stored ? (stored.output_schema !== undefined ? "structured output" : "cited text report") : kind;
-      return receipt(begun.reference, run?.state ?? "unknown", true, storedProcessor, storedKind,
-        contractLine(storedProcessor, storedKind, stored ? stored.output_description : described, stored?.source_policy, stored?.continue_from));
+      return receipt(reference, run?.state ?? "unknown", true, storedProcessor, storedKind,
+        contractLine(storedProcessor, storedKind, stored ? stored.output_description : described, stored?.source_policy, stored?.continue_from), hits);
     }
-    const reference = begun.reference;
-
-    let runId: string | undefined;
-    try {
-      const groupId = await ensureGroup();
-      const runInput: RunInput = {
-        input: raw,
-        processor,
-        enable_events: true,
-        task_spec,
-        metadata: { webtasks_ref: reference },
-        ...(source_policy ? { source_policy } : {}),
-        ...(previousInteractionId ? { previous_interaction_id: previousInteractionId } : {}),
-      };
-      const added = await (await client()).taskGroup.addRuns(
-        groupId,
-        { inputs: [runInput], default_task_spec: task_spec },
-        { maxRetries: 0 },
-      );
-      runId = added.run_ids?.[0];
-      if (!runId) throw new Error("Parallel accepted the job without returning a run");
-      // Bind the accepted run before anything else can fail: from here on it exists and is paid for.
-      await store.bindProviderRun({ sessionId, reference, providerRunId: runId, groupId, state: "accepted" });
-      if (added.event_cursor) await store.setGroupCursor(sessionId, added.event_cursor);
-    } catch (err) {
-      // An accepted-but-unrecorded submission is uncertain, not failed: the run may exist.
-      const status = (err as { status?: number }).status;
-      const uncertain = runId !== undefined || typeof status !== "number" || status >= 500 || status === 408;
-      await store.setRunState({
-        sessionId, reference, state: uncertain ? "uncertain" : "failed", error: errorText(err),
-      }).catch(() => undefined);
-      throw new Error(
-        `Research submission did not complete: ${errorText(err) ?? "unknown error"}. ` +
-        `${uncertain
-          ? `It may have started anyway: ${reference} is being checked and reports its result if it did, so it needs no new submission.`
-          : `Record ${reference}.`}`,
-      );
-    }
+    const { reference, response: { runId, parallel } } = outcome;
 
     // The run is accepted and bound. Its first status read is best effort: collection reconciles the rest.
     try {
-      const run = await (await client()).taskRun.retrieve(runId, { maxRetries: 0 });
+      const run = await parallel.taskRun.retrieve(runId, { maxRetries: 0 });
       await store.bindProviderRun({
         sessionId, reference, providerRunId: runId, interactionId: run.interaction_id ?? undefined,
         state: runStatus(run) === "running" ? "pending" : "accepted",
@@ -431,7 +428,7 @@ export function createTaskService(options: Options) {
 
     void track(reference);
     options.onAlerts();
-    return receipt(reference, "submitted", false, processor, kind, contractLine(processor, kind, described, source_policy, clean(input.continue_from)));
+    return receipt(reference, "submitted", false, processor, kind, contractLine(processor, kind, described, source_policy, clean(input.continue_from)), []);
   }
 
   /** The effective request, stated plainly so the caller can see what it asked for. */

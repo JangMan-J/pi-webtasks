@@ -109,14 +109,20 @@ test("domains restrict the web search tool without becoming model-visible ids", 
   ]);
 });
 
+// Failed-versus-uncertain settlement is the recorded paid call's rule (tests/paid-call.test.ts).
+// This checks the answer's own wording and what makes a response unusable.
 test("a definite rejection is failed; an ambiguous response is uncertain", async t => {
   const rejected = await harness(t, () => { throw Object.assign(new Error("bad request"), { status: 400, name: "BadRequestError" }); });
   await assert.rejects(() => rejected.service.answer({ question: "q" }, { invocationId: "call-1" }), /Answer did not complete: bad request/);
   assert.equal((await rejected.store.listRuns("s1"))[0]!.state, "failed");
 
   const broken = await harness(t, () => { throw Object.assign(new Error("socket hang up"), { name: "APIConnectionError" }); });
-  await assert.rejects(() => broken.service.answer({ question: "q" }, { invocationId: "call-1" }), /outcome is unknown/);
+  await assert.rejects(() => broken.service.answer({ question: "q" }, { invocationId: "call-1" }), /outcome is unknown \(record run_\w+\); ask again only if you still need the answer/);
   assert.equal((await broken.store.listRuns("s1"))[0]!.state, "uncertain");
+
+  const anonymous = await harness(t, () => ({ status: "completed", output_text: "An answer without an id." }));
+  await assert.rejects(() => anonymous.service.answer({ question: "q" }, { invocationId: "call-1" }), /answer came back incomplete/);
+  assert.equal((await anonymous.store.listRuns("s1"))[0]!.state, "uncertain", "without an id it cannot be continued or trusted");
 
   const empty = await harness(t, () => ({ id: "resp_x", status: "completed", output_text: "  " }));
   await assert.rejects(() => empty.service.answer({ question: "q" }, { invocationId: "call-1" }), /answer came back empty/);

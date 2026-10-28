@@ -140,6 +140,61 @@ test("a replayed invocation does not buy a second run", async t => {
   assert.match(replay.text, /Contract: core; text report/);
 });
 
+test("a missing credential fails the submission: nothing was sent, so nothing is being checked", async t => {
+  const dir = await mkdtemp(resolve(tmpdir(), "task-service-"));
+  const store = await new ResearchStore(dir).init();
+  const service = createTaskService({
+    store, sessionId: "s1", log: () => undefined, onAlerts: () => undefined,
+    client: async () => { throw new Error("Run /login, choose Parallel, and paste an API key"); },
+  });
+  t.after(async () => { await service.stop(); await store.close(); await rm(dir, { recursive: true, force: true }); });
+
+  await assert.rejects(
+    () => service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" }),
+    (err: Error) => err.message === "Run /login, choose Parallel, and paste an API key",
+  );
+  const [run] = await store.listRuns("s1");
+  assert.equal(run?.state, "failed", "not uncertain: the provider was never asked");
+});
+
+test("a rejected submission is failed; an accepted one that returned no run is uncertain and being checked", async t => {
+  const rejected = await harness(t, { addRuns: () => { throw Object.assign(new Error("invalid task spec"), { status: 422 }); } });
+  await assert.rejects(
+    () => rejected.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" }),
+    (err: Error) => /^Research submission did not complete: invalid task spec\. Record run_[0-9a-f]{16}\.$/.test(err.message),
+  );
+  assert.equal((await rejected.store.listRuns("s1"))[0]?.state, "failed");
+
+  const unbound = await harness(t, { addRuns: () => ({ run_ids: [] }) });
+  await assert.rejects(
+    () => unbound.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" }),
+    (err: Error) => /It may have started anyway: run_[0-9a-f]{16} is being checked/.test(err.message),
+  );
+  assert.equal((await unbound.store.listRuns("s1"))[0]?.state, "uncertain", "reconciliation looks for it by its reference");
+});
+
+test("an accepted run that cannot be recorded is uncertain, whatever the recording error says", async t => {
+  const h = await harness(t);
+  // A recording failure that happens to carry a 4xx status must not read as a rejection.
+  const failing = Object.create(h.store) as ResearchStore;
+  failing.bindProviderRun = async () => { throw Object.assign(new Error("constraint failed"), { status: 409 }); };
+  const service = createTaskService({
+    store: failing, sessionId: "s1", log: () => undefined, onAlerts: () => undefined, retryMs: 5,
+    client: async () => ({
+      taskGroup: {
+        create: async () => ({ taskgroup_id: "tg_1" }),
+        addRuns: async () => ({ run_ids: ["trun_1"] }),
+      },
+    }) as never,
+  });
+  t.after(() => service.stop());
+  await assert.rejects(
+    () => service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" }),
+    (err: Error) => /recording it failed: constraint failed\. It may have started anyway/.test(err.message) && !/trun_1/.test(err.message),
+  );
+  assert.equal((await h.store.listRuns("s1"))[0]?.state, "uncertain");
+});
+
 test("processor policy: core floor, ultra2x ceiling, no silent substitution", async t => {
   assert.equal(validateProcessor(undefined), "core");
   assert.equal(validateProcessor("ultra2x"), "ultra2x");

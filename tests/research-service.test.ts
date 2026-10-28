@@ -151,46 +151,17 @@ test("a replayed invocation returns stored evidence instead of paying twice", as
   assert.equal(distinct.details.replayed, undefined);
 });
 
-test("a connection failure leaves an uncertain record and refuses to hide it", async t => {
+// Failed-versus-uncertain settlement is the recorded paid call's rule (tests/paid-call.test.ts).
+// These check only that search and fetch go through it under their own names.
+test("a failed search or fetch settles its record under the tool's name", async t => {
   const h = await harness(t, {
-    search: async () => {
-      const error = new Error("socket hang up");
-      error.name = "APIConnectionError";
-      throw error;
-    },
-  });
-  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
-  const runs = await h.store.listRuns("s1");
-  assert.equal(runs.length, 1);
-  assert.equal(runs[0]!.state, "uncertain", "an ambiguous outcome is not recorded as failed");
-  assert.equal(runs[0]!.kind, "search");
-});
-
-test("a definite rejection settles the record as failed", async t => {
-  const h = await harness(t, {
-    search: async () => {
-      const error = Object.assign(new Error("invalid request"), { status: 400, name: "BadRequestError" });
-      throw error;
-    },
+    search: async () => { throw Object.assign(new Error("invalid request"), { status: 400, name: "BadRequestError" }); },
+    extract: async () => { throw Object.assign(new Error("socket hang up"), { name: "APIConnectionError" }); },
   });
   await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /Search did not complete: invalid request\. Record run_/);
+  await assert.rejects(() => h.service.fetch({ urls: ["https://example.org/a"] }, { invocationId: "call-2" }), /Fetch did not complete: socket hang up\. Its outcome is unknown/);
   const runs = await h.store.listRuns("s1");
-  assert.equal(runs[0]!.state, "failed");
-  assert.equal(runs[0]!.error, "invalid request");
-});
-
-test("a 5xx or timeout is uncertain, not a clean failure", async t => {
-  const h = await harness(t, {
-    search: async () => { throw Object.assign(new Error("upstream unavailable"), { status: 503, name: "InternalServerError" }); },
-  });
-  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
-  assert.equal((await h.store.listRuns("s1"))[0]!.state, "uncertain");
-
-  const timeout = await harness(t, {
-    search: async () => { throw Object.assign(new Error("timed out"), { name: "APIConnectionTimeoutError" }); },
-  });
-  await assert.rejects(() => timeout.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
-  assert.equal((await timeout.store.listRuns("s1"))[0]!.state, "uncertain");
+  assert.deepEqual(runs.map(run => [run.kind, run.state]).sort(), [["extract", "uncertain"], ["search", "failed"]]);
 });
 
 test("extract stores per-URL content and reports failures without inventing evidence", async t => {

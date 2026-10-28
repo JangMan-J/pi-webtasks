@@ -82,7 +82,9 @@ choose; the configured default is `core` (`WEBTASKS_TASK_PROCESSOR` overrides).
 - A paid call is recorded before it is sent and is never retried automatically.
   Replaying the same Pi invocation returns what is already stored instead of
   paying twice; an interrupted request is marked `uncertain`, not silently
-  resubmitted.
+  resubmitted. Every paid tool settles a failure the same way: a missing key or
+  a 4xx rejection is `failed`; anything else that may have reached Parallel
+  (5xx, 408, a lost connection, a timeout) is `uncertain`.
 - Retrieved text is untrusted material, not instructions.
 
 ## Development

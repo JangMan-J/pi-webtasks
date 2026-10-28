@@ -160,7 +160,11 @@ test("action_required is alerted once per entry, stays watched, pauses the timet
   const reference = await h.run();
   await h.lifecycle.observed(reference, { status: "running" });
   assert.deepEqual(await h.lifecycle.observed(reference, { status: "action_required", error: "needs approval" }), { open: true });
-  assert.deepEqual(await h.lifecycle.observed(reference, { status: "action_required" }), { open: true }, "a repeat is still watched");
+  // Collection reads the status again on every reconnect; time passes between reads.
+  for (let reread = 0; reread < 3; reread++) {
+    h.advance(5_000);
+    assert.deepEqual(await h.lifecycle.observed(reference, { status: "action_required" }), { open: true }, "a repeat is still watched");
+  }
   let alerts = await h.pending();
   assert.equal(alerts.length, 1, "one alert for one entry");
   assert.equal(alerts[0]!.kind, "action_required");

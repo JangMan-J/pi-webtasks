@@ -395,3 +395,18 @@ test("a replay describes the submission it recorded, with defaults for fields an
   assert.match(old.text, /Contract: core2x; text report/);
   assert.equal(h.calls.adds.length, 1, "neither replay was sent");
 });
+
+test("a halted run is alerted once however often its stream reconnects", async t => {
+  const h = await harness(t, {
+    events: () => [{ type: "task_run.state", event_id: "evt_halt", run: { run_id: "trun_1", status: "action_required" } }],
+    status: () => "action_required",
+  });
+  const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
+  const reference = String(receipt.details.reference);
+  await until(() => h.calls.streams >= 4);
+  h.advance(60_000);
+  await until(() => h.calls.streams >= 6);
+  await h.service.stop();
+  assert.equal((await h.store.run("s1", reference))?.state, "action_required", "still open and watched");
+  assert.equal((await h.store.alerts("s1")).filter(alert => alert.kind === "action_required").length, 1);
+});

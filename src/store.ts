@@ -719,7 +719,7 @@ export class ResearchStore {
                                               THEN ? + COALESCE(alert_interval_ms, ?) ELSE next_alert_at END,
                          state = 'pending', terminal_at = NULL, updated_at = ?
          WHERE reference = ? AND session_id = ? AND state IN (${sqlStates(OPEN_RUN_STATES)})
-           AND NOT (state = 'pending' AND running_at IS NOT NULL)`,
+           AND NOT (state = 'pending' AND running_at IS NOT NULL AND next_alert_at IS NOT NULL)`,
       ).run(now, intervalMs, now, intervalMs, now, reference, sessionId);
       return Number(info.changes) > 0;
     });

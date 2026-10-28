@@ -370,9 +370,13 @@ export function createTaskService(options: Options) {
         const stream = await (await client()).taskRun.events(runId, { signal: controller.signal, maxRetries: 0 });
         for await (const event of stream) {
           if (controller.signal.aborted) return;
-          if (!(await observe(reference, event))) fresh = true;
+          const duplicate = await observe(reference, event);
+          if (!duplicate) fresh = true;
           const providerRun = (event as { run?: TaskRun }).run;
           if (!providerRun) continue;
+          // A reconnect replays recorded events. Only a replayed end is worth another look:
+          // it may not have been committed (its result fetch failed); the rest were applied.
+          if (duplicate && !STREAM_ENDS.has(providerStatus(providerRun))) continue;
           const { open } = await lifecycle.observed(reference, await factFor(runId, providerRun, reference));
           if (!open) return;
           if (STREAM_ENDS.has(providerStatus(providerRun))) {

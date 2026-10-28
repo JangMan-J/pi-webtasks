@@ -73,6 +73,8 @@ export function progressIntervals(): Record<TaskProcessor, number> {
 const SETTLING: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
 /** Provider statuses of a run that is still active and needs nothing from us. */
 const ACTIVE: ReadonlySet<string> = new Set(["queued", "running", "cancelling"]);
+/** States a run can enter action_required from: open, and not already halted, so a repeat is not a new entry. */
+const HALTABLE: ReadonlySet<RunState> = new Set([...OPEN_RUN_STATES].filter(state => state !== "action_required"));
 /** Result fetches for a completed run before it is committed without output. */
 const RESULT_ATTEMPTS = 5;
 
@@ -139,7 +141,7 @@ export function createTaskRunLifecycle(options: Options) {
     if (status === "action_required") {
       const reason = errorText(fact.error);
       const moved = await store.transitionRun({
-        sessionId, reference, from: OPEN_RUN_STATES, to: "action_required", error: reason,
+        sessionId, reference, from: HALTABLE, to: "action_required", error: reason,
         alert: {
           kind: "action_required",
           headline: "Research needs attention: Parallel reports action required",

@@ -9,10 +9,15 @@ exposes SQL, provider ids, file paths, or raw HTTP.
 ## Install
 
 ```sh
-pi install npm:pi-webtasks
+pi install npm:@jangmanj/pi-webtasks
 ```
 
 Then run `/login` in Pi and choose **Parallel** (see [Credentials](#credentials)).
+
+Up to 0.1.4 this package was published unscoped as `pi-webtasks`. Releases from
+0.2.0 on are published only as `@jangmanj/pi-webtasks`. To move, run
+`pi remove npm:pi-webtasks`, then install the scoped name. The research store
+directory is the same, so stored evidence carries over.
 
 ## Status
 
@@ -129,15 +134,14 @@ git push --follow-tags   # the tag runs .github/workflows/publish.yml
 The publish workflow reruns CI, refuses a tag that does not match
 `package.json`, publishes, and creates the GitHub release.
 
-One-time setup:
-
-1. Publish the first version by hand, because npm attaches a trusted publisher
-   only to a package that exists: `npm login`, then `npm publish`.
-2. On npmjs.com, open the package's **Settings > Trusted publishing**. Add GitHub
-   Actions with user `JangMan-J`, repository `pi-webtasks`, workflow
-   `publish.yml`, and environment `npm`.
-3. Optional but recommended: under **Publishing access**, choose *Require
-   two-factor authentication and disallow tokens*.
+One-time setup for a package name that is not on npm yet: `npm login`, then
+`npm run bootstrap:npm` in an interactive terminal (one 2FA approval). The
+script stages a throwaway `0.0.0-bootstrap` to create the package, links
+`publish.yml` (environment `npm`) as its trusted publisher, and pushes the
+`v<version>` tag, so CI publishes the first real version with provenance. Run
+`npm run bootstrap:npm -- --dry-run` first to check the plan. Later,
+`npm run bootstrap:npm -- --cleanup` removes the staged throwaway and the
+`0.0.0-stage` placeholder (two more approvals).
 
 Retired experiments, benchmarks, and the pre-rewrite implementation live in
 `.archive/` (git-ignored). `npm run docs:snapshot` refreshes the Parallel docs

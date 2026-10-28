@@ -26,14 +26,17 @@ jobs:
       contents: write # create the GitHub release
       id-token: write # npm trusted publishing (OIDC)
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false # never use caching in release builds
-      - name: Use an npm with trusted publishing (11.5.1 or later)
-        run: npm install -g npm@^11.5.1 && npm --version
+      - name: npm must support trusted publishing (11.5.1 or later)
+        run: |
+          npm --version
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)" \
+            || { echo "::error::npm $(npm --version) is too old for trusted publishing (needs 11.5.1 or later)"; exit 1; }
       - name: The tag must match package.json
         run: |
           version="$(node -p 'require("./package.json").version')"
@@ -56,6 +59,10 @@ jobs:
           fi
       - if: steps.registry.outputs.published == 'false'
         run: npm publish
+        env:
+          # npm explains a failed trusted-publishing (OIDC) exchange only at verbose level;
+          # without it a failure shows up as a bare E404 on the upload.
+          NPM_CONFIG_LOGLEVEL: verbose
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

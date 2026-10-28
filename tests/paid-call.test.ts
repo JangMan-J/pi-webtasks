@@ -170,7 +170,7 @@ test("a call without settle hands the accepted run off in the state its request 
     processor: "core",
     invocation: { invocationId: "call-1" },
     send: async (_client, { reference }) => {
-      await h.store.bindProviderRun({ sessionId: "s1", reference, providerRunId: "trun_1", state: "accepted" });
+      await h.store.bindProviderRun({ sessionId: "s1", reference, providerRunId: "trun_1" });
       return { runId: "trun_1" };
     },
   });

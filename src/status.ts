@@ -14,7 +14,7 @@
  * outcome is unknown is shown as "+?".
  */
 
-import type { RunKind, RunState } from "./store.ts";
+import { OPEN_RUN_STATES, type RunKind, type RunState } from "./store.ts";
 
 export type StatusLane = "web" | "answer" | "research";
 
@@ -31,8 +31,6 @@ const EXTRA_RESULT_PRICE = 1_000;
 const EXTRACT_PRICE_PER_URL = 1_000;
 const ANSWER_PRICE: Record<string, number> = { low: 10_000, medium: 50_000, high: 250_000 };
 const TASK_PRICE: Record<string, number> = { core: 25_000, core2x: 50_000, pro: 100_000, ultra: 300_000, ultra2x: 600_000 };
-/** A Task run is only billed when it completes; these states may still complete. */
-const RESEARCH_IN_PROGRESS: ReadonlySet<RunState> = new Set<RunState>(["submitting", "accepted", "pending", "uncertain"]);
 
 export type StatusTotals = {
   counts: Record<StatusLane, number>;
@@ -47,7 +45,8 @@ export function statusTotals(runs: RunSummary[]): StatusTotals {
   const totals: StatusTotals = { counts: { web: 0, answer: 0, research: 0 }, microdollars: 0, unpriced: false, researchInProgress: 0 };
   for (const run of runs) {
     const intent = (run.intent ?? {}) as { mode?: string; urls?: unknown[]; effort?: string };
-    if (run.kind === "task" && RESEARCH_IN_PROGRESS.has(run.state)) totals.researchInProgress++;
+    // A Task run is only billed when it completes; an open run may still complete.
+    if (run.kind === "task" && OPEN_RUN_STATES.has(run.state)) totals.researchInProgress++;
     if (run.state === "uncertain") totals.unpriced = true;
     if (run.state !== "completed") continue;
     if (run.kind === "search") {

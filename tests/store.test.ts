@@ -108,7 +108,8 @@ test("a parent run must belong to the same session", async t => {
 test("completion commits payload, evidence, index, citations, state, and alert together", async t => {
   const { store } = await open(t);
   const { reference } = await store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: { goal: "compare stores" }, processor: "core" });
-  await store.bindProviderRun({ sessionId: "s1", reference, providerRunId: "trun_1", state: "pending" });
+  await store.bindProviderRun({ sessionId: "s1", reference, providerRunId: "trun_1" });
+  assert.equal((await store.run("s1", reference))?.state, "accepted", "binding confirms an unconfirmed run");
 
   const raw = { run: { run_id: "trun_1" }, output: { content: "Bash eats complexity; SQLite eats concurrency." } };
   const result = await store.completeRun({
@@ -544,9 +545,10 @@ test("an older store is migrated in place before the schema indexes run", async 
   for (const column of ["provider_interaction_id", "running_at", "next_alert_at", "alert_interval_ms"]) {
     assert.ok(columns.includes(column), `${column} was added`);
   }
-  assert.deepEqual(await reopened.runsNeedingProgress("s1", Date.now()), [], "the sweeper query works after migration");
-  await reopened.markRunning("s1", begun.reference, { runningAt: 10, intervalMs: 100, nextAlertAt: 110 });
-  assert.equal((await reopened.run("s1", begun.reference))?.next_alert_at, 110);
+  assert.deepEqual(await reopened.runsNeedingProgress("s1"), [], "the sweeper query works after migration");
+  assert.equal(await reopened.markRunning("s1", begun.reference, 100), true);
+  const running = await reopened.run("s1", begun.reference);
+  assert.equal(running?.next_alert_at, running!.running_at! + 100);
   assert.equal(await reopened.schemaVersion(), 2);
 });
 
@@ -570,11 +572,15 @@ test("deleteRun keeps continuations of the deleted run", async t => {
   assert.equal(kept.parent, undefined);
 });
 
-test("a late running observation cannot reopen a settled run", async t => {
+test("a late running observation or bind cannot reopen a settled run", async t => {
   const { store } = await open(t);
   const { reference } = await completedRun(store, "s1", "call-1", "Settled.");
-  await store.markRunning("s1", reference, { runningAt: 1, intervalMs: 100, nextAlertAt: 101 });
+  assert.equal(await store.markRunning("s1", reference, 100), false);
+  await store.bindProviderRun({ sessionId: "s1", reference, providerRunId: "trun_call-1", interactionId: "int_late" });
+  assert.equal(await store.transitionRun({ sessionId: "s1", reference, from: new Set(["completed", "accepted"]), to: "action_required" }), false);
   assert.equal((await store.run("s1", reference))?.state, "completed");
+  assert.equal(await store.queueProgress("s1", reference, { kind: "progress", headline: "late", dedup_key: "late" }), false);
+  assert.equal((await store.alerts("s1")).filter(alert => alert.kind === "progress").length, 0, "no progress alert for a settled run");
 });
 
 test("two processes racing the same tool invocation create exactly one run", async t => {

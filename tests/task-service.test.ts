@@ -3,8 +3,8 @@ import test from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { ResearchStore } from "../src/store.ts";
-import { createTaskService, validateProcessor, PROGRESS_INTERVALS_MS } from "../src/task-service.ts";
+import { ResearchStore, TERMINAL_RUN_STATES } from "../src/store.ts";
+import { createTaskService, validateProcessor } from "../src/task-service.ts";
 
 function stream<T>(items: T[]): AsyncIterable<T> {
   return { async *[Symbol.asyncIterator]() { for (const item of items) yield item; } };
@@ -59,16 +59,15 @@ function fakeClient(config: {
 
 async function harness(t: import("node:test").TestContext, config: Parameters<typeof fakeClient>[0] = {}) {
   const dir = await mkdtemp(resolve(tmpdir(), "task-service-"));
-  const store = new ResearchStore(dir);
+  let clock = 1_000_000;
+  const store = new ResearchStore(dir, { now: () => clock });
   await store.init();
   await store.registerSession("s1");
-  let clock = 1_000_000;
   const { client, calls } = fakeClient(config);
   let alerts = 0;
   const service = createTaskService({
     store,
     sessionId: "s1",
-    now: () => clock,
     client: async () => client as never,
     onAlerts: () => { alerts++; },
     log: () => undefined,
@@ -95,7 +94,7 @@ async function until(check: () => Promise<boolean> | boolean, ms = 3000): Promis
 
 const terminal = async (h: Awaited<ReturnType<typeof harness>>, reference: string) => {
   const run = await h.store.run("s1", reference);
-  return run ? ["completed", "failed", "cancelled", "action_required"].includes(run.state) : false;
+  return run ? TERMINAL_RUN_STATES.has(run.state) : false;
 };
 
 test("submission carries an explicit text schema, events, metadata, and the core floor", async t => {
@@ -285,24 +284,6 @@ test("a completed stream commits output, citations, sources, and one completion 
   assert.ok(h.alerts() > 0, "the runtime is woken to deliver it");
 });
 
-test("a failed result fetch is retried instead of committing a completion without output", async t => {
-  let results = 0;
-  const h = await harness(t, {
-    events: () => [{ type: "task_run.state", run: { run_id: "trun_1", status: "completed", interaction_id: "int_1" } }],
-    result: () => {
-      if (++results === 1) throw Object.assign(new Error("gateway timeout"), { status: 504 });
-      return { run: { run_id: "trun_1", status: "completed" }, output: { content: "The real report.", basis: [] } };
-    },
-  });
-  const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
-  const reference = String(receipt.details.reference);
-  await until(() => terminal(h, reference));
-  assert.equal(results, 2, "the result was fetched again after the first failure");
-  const run = await h.store.run("s1", reference);
-  assert.equal(run?.state, "completed");
-  assert.match(run?.summary ?? "", /The real report/);
-});
-
 test("an accepted run stays bound when its first status read fails", async t => {
   let retrieves = 0;
   const h = await harness(t, {
@@ -319,9 +300,11 @@ test("an accepted run stays bound when its first status read fails", async t => 
 });
 
 test("a stream that closes without a terminal event is not treated as completion", async t => {
+  let reads = 0;
   const h = await harness(t, {
     events: () => [{ type: "task_run.progress_stats", progress_meter: 10, source_stats: { num_sources_considered: 2 } }],
-    status: () => "completed",
+    // Running at submission; completed by the time the stream has closed.
+    status: () => (reads++ === 0 ? "running" : "completed"),
     result: () => ({ run: { run_id: "trun_1", status: "completed", interaction_id: "int_1" }, output: { content: "Recovered report.", basis: [] } }),
   });
   const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
@@ -330,52 +313,6 @@ test("a stream that closes without a terminal event is not treated as completion
   assert.equal((await h.store.run("s1", reference))?.state, "completed");
   assert.ok(h.calls.retries >= 2, "the provider status decided, not the stream close (one retrieve for the submission, one for the closed stream)");
   assert.match((await h.store.readEvidence("s1", (await h.store.search("s1", { reference, kinds: ["report"] })).hits[0]!.handle)).text, /Recovered report/);
-});
-
-test("a failed run stores the failure and alerts without pretending there is output", async t => {
-  const h = await harness(t, {
-    events: () => [{ type: "task_run.state", event_id: "", run: { run_id: "trun_1", status: "failed", error: { message: "provider exploded" } } }],
-  });
-  const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
-  const reference = String(receipt.details.reference);
-  await until(() => terminal(h, reference));
-  const run = await h.store.run("s1", reference);
-  assert.equal(run?.state, "failed");
-  assert.match(run?.error ?? "", /provider exploded/);
-  const alerts = await h.store.alerts("s1");
-  assert.equal(alerts.length, 1);
-  assert.equal(alerts[0]!.kind, "failure");
-  assert.match(alerts[0]!.body ?? "", /Read what it stored with web_recall/);
-});
-
-test("progress alerts follow the processor timetable and coalesce per interval", async t => {
-  const h = await harness(t, {
-    events: () => [
-      { type: "task_run.state", event_id: "", run: { run_id: "trun_1", status: "running", interaction_id: "int_1" } },
-      { type: "task_run.progress_stats", progress_meter: 30, source_stats: { num_sources_considered: 7 } },
-    ],
-    status: () => "running",
-  });
-  const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
-  const reference = String(receipt.details.reference);
-  await until(async () => (await h.store.run("s1", reference))?.state === "pending");
-  await until(async () => (await h.store.observations("s1", reference)).some(event => event.eventType === "task_run.progress_stats"));
-  const scheduled = await h.store.run("s1", reference);
-  assert.equal(scheduled?.alert_interval_ms, PROGRESS_INTERVALS_MS.core, "core schedule is one third of its published upper latency");
-  assert.equal(scheduled?.next_alert_at, h.now() + PROGRESS_INTERVALS_MS.core);
-
-  h.advance(PROGRESS_INTERVALS_MS.core);
-  await h.service.tick();
-  const alerts = await h.store.alerts("s1", { states: ["pending"] });
-  assert.equal(alerts.length, 1);
-  assert.equal(alerts[0]!.kind, "progress");
-  assert.match(alerts[0]!.headline, /still running \(core\): 7 source/);
-  assert.match(alerts[0]!.body ?? "", /Latest finding|Latest activity|No new details/);
-  const advanced = await h.store.run("s1", reference);
-  assert.equal(advanced?.next_alert_at, h.now() + PROGRESS_INTERVALS_MS.core, "the schedule continues while the run is active");
-
-  await h.service.tick();
-  assert.equal((await h.store.alerts("s1", { states: ["pending"] })).length, 1, "the same interval does not produce a second alert");
 });
 
 test("an earlier run provides the interaction id for a continuation", async t => {
@@ -403,7 +340,7 @@ test("an unbound submission is recovered from the group instead of resubmitted",
   const begun = await h.store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: { input: "x" }, kind: "task", state: "submitting" });
   // The fake group reports the reference the store actually allocated.
   const fixed = createTaskService({
-    store: h.store, sessionId: "s1", now: h.now,
+    store: h.store, sessionId: "s1",
     client: async () => ({
       taskGroup: {
         create: async () => ({ taskgroup_id: "tg_1" }),
@@ -426,16 +363,16 @@ test("an unbound submission is recovered from the group instead of resubmitted",
   assert.equal(h.calls.adds.length, 0);
 });
 
-test("reconciliation settles a run that completed while Pi was closed", async t => {
-  const h = await harness(t, {
-    events: () => [],
-    status: () => "completed",
-    result: () => ({ run: { run_id: "trun_1", status: "completed", interaction_id: "int_1" }, output: { content: "Finished while closed.", basis: [] } }),
-  });
-  const receipt = await h.service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" });
-  const reference = String(receipt.details.reference);
-  await until(() => terminal(h, reference));
-  await h.store.setRunState({ sessionId: "s1", reference, state: "completed" }).catch(() => undefined);
-  const reopened = await h.store.run("s1", reference);
-  assert.equal(reopened?.state, "completed");
+test("a run stored as action_required is watched again at session start", async t => {
+  const h = await harness(t, { status: () => "running", events: () => [] });
+  const begun = await h.store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: { input: "x" }, kind: "task", processor: "core", state: "submitting" });
+  await h.store.bindProviderRun({ sessionId: "s1", reference: begun.reference, providerRunId: "trun_halted" });
+  // A halted run, as an earlier session left it (older releases treated this state as settled).
+  await h.store.transitionRun({ sessionId: "s1", reference: begun.reference, from: new Set(["accepted"]), to: "action_required" });
+
+  await h.service.reconcile();
+  const resumed = await h.store.run("s1", begun.reference);
+  assert.equal(resumed?.state, "pending", "Parallel reports it running again, so it runs locally too");
+  assert.ok(h.calls.retries >= 1, "its status was read from Parallel");
+  await h.service.stop();
 });

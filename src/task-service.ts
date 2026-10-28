@@ -1,6 +1,5 @@
 /**
- * Asynchronous Parallel Task research: submission, live collection, recovery,
- * and progress/completion alerts.
+ * Asynchronous Parallel Task research: submission and live collection.
  *
  * Contracts this module owns:
  *
@@ -14,53 +13,27 @@
  *  - One Task Group per Pi session. The run carries the local reference in its
  *    metadata, so a crash between submission and binding can be reconciled from
  *    the group instead of resubmitting.
- *  - Progress is collected continuously from the run's event stream. A closed
- *    stream is not completion: the run status decides.
- *  - Alerts are persisted before delivery, scheduled from published processor
- *    latency (not deadlines or percentages), and coalesced per interval.
- *  - Completed output, its field basis, and its cited sources are committed in
- *    one local transaction with the run state and the completion alert.
+ *  - Collection: every provider read (the run's event stream, its status, its
+ *    result) happens here, and each fact goes to the Task run lifecycle
+ *    (`task-run-lifecycle.ts`), which decides and commits. A closed stream is
+ *    not completion: the run status decides.
  */
 
 import type { Parallel } from "parallel-web";
-import type { FieldBasis, RunInput, TaskRun, TaskRunEventsResponse, TaskRunResult, TaskSpec } from "parallel-web/resources";
-import type { AlertInput, CitationInput, EvidenceInput, ResearchStore, RunState, SearchHit } from "./store.ts";
+import type { RunInput, TaskRun, TaskRunEventsResponse, TaskRunResult, TaskSpec } from "parallel-web/resources";
+import { OPEN_RUN_STATES, TERMINAL_RUN_STATES, UNCONFIRMED_RUN_STATES, type ResearchStore, type SearchHit } from "./store.ts";
 import { createPaidCalls } from "./paid-call.ts";
+import {
+  createTaskRunLifecycle,
+  providerStatus,
+  TASK_FLOOR,
+  TASK_PROCESSORS,
+  type ProviderFact,
+  type TaskProcessor,
+} from "./task-run-lifecycle.ts";
+import { clean, errorText, oneLine } from "./receipt.ts";
 
-export const TASK_PROCESSORS = ["core", "core2x", "pro", "ultra", "ultra2x"] as const;
-export type TaskProcessor = (typeof TASK_PROCESSORS)[number];
-export const TASK_FLOOR: TaskProcessor = "core";
 export const TASK_CEILING: TaskProcessor = "ultra2x";
-
-/**
- * Progress guidance per processor: one third of the lower of the two published
- * upper latency estimates (processor guide and pricing page). These are
- * guidance for "send an update this often", never deadlines or percentages.
- * Override with WEBTASKS_PROGRESS_MS='{"core":100000,...}'.
- */
-export const PROGRESS_INTERVALS_MS: Record<TaskProcessor, number> = {
-  core: 100_000,
-  core2x: 200_000,
-  pro: 200_000,
-  ultra: 500_000,
-  ultra2x: 500_000,
-};
-
-export function progressIntervals(): Record<TaskProcessor, number> {
-  const raw = process.env.WEBTASKS_PROGRESS_MS?.trim();
-  if (!raw) return PROGRESS_INTERVALS_MS;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const merged = { ...PROGRESS_INTERVALS_MS };
-    for (const processor of TASK_PROCESSORS) {
-      const value = parsed[processor];
-      if (typeof value === "number" && Number.isFinite(value) && value >= 5_000) merged[processor] = Math.trunc(value);
-    }
-    return merged;
-  } catch {
-    return PROGRESS_INTERVALS_MS;
-  }
-}
 
 export function validateProcessor(value: string | undefined): TaskProcessor {
   const chosen = (value?.trim() || process.env.WEBTASKS_TASK_PROCESSOR?.trim() || TASK_FLOOR);
@@ -92,25 +65,17 @@ type Options = {
   client: () => Promise<Parallel>;
   /** Wake the runtime's alert drain. */
   onAlerts: () => void;
-  now?: () => number;
   log?: (message: string) => void;
   sweepMs?: number;
   /** First reconnect delay for a run's event stream; it doubles up to five minutes. */
   retryMs?: number;
 };
 
-const TERMINAL: ReadonlySet<string> = new Set(["completed", "failed", "cancelled", "action_required"]);
 /** Reconnect delay bounds for a run's event stream. */
 const RETRY_MIN_MS = 3_000;
 const RETRY_MAX_MS = 300_000;
-/** Result fetches for a completed run before it is committed without output. */
-const RESULT_ATTEMPTS = 5;
-const ACTIVE: ReadonlySet<string> = new Set(["queued", "running", "cancelling"]);
-
-function clean(value: string | null | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-}
+/** Provider statuses after which a run's event stream has nothing more to say. */
+const STREAM_ENDS: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
@@ -125,140 +90,17 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function runStatus(run: { status?: unknown } | undefined): string {
-  const status = (run as { status?: unknown } | undefined)?.status;
-  return typeof status === "string" ? status : "unknown";
-}
-
-function oneLine(text: string, limit = 160): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length <= limit ? flat : `${flat.slice(0, limit - 1)}…`;
-}
-
-function errorText(error: unknown): string | undefined {
-  if (!error) return undefined;
-  if (typeof error === "string") return oneLine(error);
-  if (typeof error === "object") {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string") return oneLine(message);
-    try { return oneLine(JSON.stringify(error)); } catch { return undefined; }
-  }
-  return oneLine(String(error));
-}
-
-/** Build evidence and citation links from a completed Task output and its basis. */
-function outputEvidence(output: TaskRunResult["output"] | undefined): { evidence: EvidenceInput[]; citations: CitationInput[] } {
-  if (!output) return { evidence: [], citations: [] };
-  const evidence: EvidenceInput[] = [];
-  const citations: CitationInput[] = [];
-  const basis: FieldBasis[] = Array.isArray(output.basis) ? output.basis : [];
-
-  const sourceRefs = new Map<string, string>();
-  for (const field of basis) {
-    for (const citation of field.citations ?? []) {
-      const url = clean(citation.url);
-      if (!url || sourceRefs.has(url)) continue;
-      const ref = `src:${sourceRefs.size}`;
-      sourceRefs.set(url, ref);
-      const excerpts = (citation.excerpts ?? []).filter(text => text.trim());
-      evidence.push({
-        kind: "source",
-        origin: "provider_source",
-        title: clean(citation.title),
-        url,
-        pointer: `basis[${basis.indexOf(field)}].citations`,
-        body: excerpts.length ? excerpts.join("\n\n") : url,
-        payload: citation,
-        ref,
-      });
-    }
-  }
-
-  const content = output.content;
-  if (typeof content === "string") {
-    evidence.push({ kind: "report", origin: "provider_report", title: "Research report", body: content, pointer: "output.content", payload: output, ref: "report" });
-    for (const field of basis) {
-      for (const citation of field.citations ?? []) {
-        const url = clean(citation.url);
-        const ref = url ? sourceRefs.get(url) : undefined;
-        if (!ref) continue;
-        citations.push({
-          evidence: "report",
-          source: ref,
-          claim: oneLine(field.reasoning ?? field.field ?? "", 400) || undefined,
-          url,
-          title: clean(citation.title),
-        });
-      }
-    }
-    return { evidence, citations };
-  }
-
-  const fields = content && typeof content === "object" && !Array.isArray(content) ? Object.entries(content) : [];
-  evidence.push({
-    kind: "structured",
-    origin: "provider_structured",
-    title: "Structured research output",
-    body: JSON.stringify(content, null, 2),
-    pointer: "output.content",
-    payload: output,
-    ref: "document",
-  });
-  for (const [name, value] of fields) {
-    const ref = `field:${name}`;
-    evidence.push({
-      kind: "structured",
-      origin: "provider_structured",
-      title: name,
-      body: typeof value === "string" ? value : JSON.stringify(value, null, 2),
-      pointer: `output.content.${name}`,
-      ref,
-    });
-  }
-  for (const field of basis) {
-    const name = typeof field.field === "string" ? field.field : undefined;
-    const target = name && fields.some(([candidate]) => candidate === name) ? `field:${name}` : "document";
-    for (const citation of field.citations ?? []) {
-      const url = clean(citation.url);
-      const source = url ? sourceRefs.get(url) : undefined;
-      if (!source) continue;
-      citations.push({
-        evidence: target,
-        source,
-        claim: oneLine(field.reasoning ?? field.field ?? "", 400) || undefined,
-        url,
-        title: clean(citation.title),
-      });
-    }
-  }
-  return { evidence, citations };
-}
-
-function summarizeOutput(output: TaskRunResult["output"] | undefined, sources: number): string {
-  if (!output) return "completed without retrievable output";
-  if (typeof output.content === "string") {
-    const firstLine = output.content.split("\n").map(line => line.replace(/^#+\s*/, "").trim()).find(Boolean);
-    return oneLine(firstLine ?? output.content.replace(/\s+/g, " "), 120);
-  }
-  const fields = output.content && typeof output.content === "object" ? Object.keys(output.content) : [];
-  return fields.length ? `structured output: ${fields.slice(0, 6).join(", ")}${fields.length > 6 ? `, +${fields.length - 6} more` : ""}${sources ? ` (${sources} cited sources)` : ""}` : "structured output";
-}
-
 export function createTaskService(options: Options) {
   const { store, sessionId } = options;
-  const now = options.now ?? Date.now;
   const log = options.log ?? (() => undefined);
   const client = options.client;
   const calls = createPaidCalls({ store, sessionId, client });
-  const intervals = progressIntervals();
+  const lifecycle = createTaskRunLifecycle({ store, sessionId, onAlerts: options.onAlerts, log });
   const active = new Map<string, AbortController>();
   const collecting = new Set<Promise<void>>();
-  /** Completed runs whose result could not be fetched yet, with the attempts made so far. */
-  const resultAttempts = new Map<string, number>();
   let groupCreation: Promise<string> | undefined;
   let sweep: ReturnType<typeof setInterval> | undefined;
   let stopping = false;
-  let ticking = false;
 
   function receipt(reference: string, state: string, replayed: boolean, processor: string, kind: string, contract: string | undefined, hits: SearchHit[]): TaskReceipt {
     const lines = replayed
@@ -391,7 +233,7 @@ export function createTaskService(options: Options) {
         if (!runId) throw new Error("Parallel accepted the job without returning a run");
         try {
           // Bind the accepted run before anything else can fail: from here on it exists and is paid for.
-          await store.bindProviderRun({ sessionId, reference, providerRunId: runId, groupId, state: "accepted" });
+          await lifecycle.bound(reference, { providerRunId: runId, groupId });
           if (added.event_cursor) await store.setGroupCursor(sessionId, added.event_cursor);
         } catch (err) {
           // Accepted means the outcome can no longer be a rejection, whatever failed here:
@@ -417,11 +259,7 @@ export function createTaskService(options: Options) {
     // The run is accepted and bound. Its first status read is best effort: collection reconciles the rest.
     try {
       const run = await parallel.taskRun.retrieve(runId, { maxRetries: 0 });
-      await store.bindProviderRun({
-        sessionId, reference, providerRunId: runId, interactionId: run.interaction_id ?? undefined,
-        state: runStatus(run) === "running" ? "pending" : "accepted",
-      });
-      if (runStatus(run) === "running") await startSchedule(reference, processor);
+      await lifecycle.observed(reference, await factFor(runId, run));
     } catch (err) {
       log(`first status check for ${reference} failed: ${errorText(err) ?? "unknown error"}`);
     }
@@ -443,16 +281,28 @@ export function createTaskService(options: Options) {
     return parts.join("; ");
   }
 
-  function scheduleFor(processor: string): number {
-    return intervals[(processor as TaskProcessor)] ?? intervals[TASK_FLOOR];
-  }
-
-  async function startSchedule(reference: string, processor: string): Promise<void> {
-    const run = await store.run(sessionId, reference);
-    if (!run || run.running_at !== undefined) return;
-    const intervalMs = scheduleFor(processor);
-    const runningAt = now();
-    await store.markRunning(sessionId, reference, { runningAt, intervalMs, nextAlertAt: runningAt + intervalMs });
+  /**
+   * What Parallel says about a run, as a lifecycle fact. A completed run's
+   * result is fetched here; a failed fetch leaves it out, and the lifecycle
+   * decides whether to wait for another attempt.
+   */
+  async function factFor(runId: string, providerRun: TaskRun | undefined, reference?: string): Promise<ProviderFact> {
+    const status = providerStatus(providerRun);
+    let result: TaskRunResult | undefined;
+    if (status === "completed") {
+      try {
+        result = await (await client()).taskRun.result(runId, { timeout: 0 }, { maxRetries: 0, timeout: 60_000 });
+      } catch (err) {
+        log(`result fetch for ${reference ?? runId} failed: ${errorText(err) ?? "unknown error"}`);
+      }
+    }
+    return {
+      status,
+      interactionId: providerRun?.interaction_id ?? undefined,
+      error: (providerRun as { error?: unknown } | undefined)?.error,
+      run: providerRun,
+      result,
+    };
   }
 
   /** Store one received event. Returns whether it was a replay. */
@@ -523,20 +373,21 @@ export function createTaskService(options: Options) {
     while (!stopping && !controller.signal.aborted) {
       const run = await store.run(sessionId, reference);
       const runId = run?.provider_run_id;
-      if (!runId) return;
-      if (TERMINAL.has(run.state)) return;
-      let terminal = false;
+      if (!runId || TERMINAL_RUN_STATES.has(run.state)) return;
+      let ended = false;
       let fresh = false;
       try {
         const stream = await (await client()).taskRun.events(runId, { signal: controller.signal, maxRetries: 0 });
         for await (const event of stream) {
           if (controller.signal.aborted) return;
           if (!(await observe(reference, event))) fresh = true;
-          const status = runStatus((event as { run?: { status?: string } }).run);
-          if (status === "running") await startSchedule(reference, run?.processor ?? TASK_FLOOR);
-          if (TERMINAL.has(status)) {
-            await settle(reference, (event as { run?: TaskRun }).run);
-            terminal = true;
+          const providerRun = (event as { run?: TaskRun }).run;
+          if (!providerRun) continue;
+          const { open } = await lifecycle.observed(reference, await factFor(runId, providerRun, reference));
+          if (!open) return;
+          if (STREAM_ENDS.has(providerStatus(providerRun))) {
+            // Seen, but not committed (a missing result or a failed commit): try again after a pause.
+            ended = true;
             break;
           }
         }
@@ -545,14 +396,8 @@ export function createTaskService(options: Options) {
         failed(`run stream for ${reference} ended: ${errorText(err) ?? "unknown error"}`);
       }
       if (controller.signal.aborted) return;
-      if (terminal) {
-        // The terminal event was seen; if committing it failed, retry rather than drop the run.
-        const after = await store.run(sessionId, reference);
-        if (after && TERMINAL.has(after.state)) return;
-      } else if (await reconcileRun(reference)) {
-        // A stream close is not completion: the provider's status decides.
-        return;
-      }
+      // A stream close is not completion: the provider's status decides.
+      if (!ended && await reconcileRun(reference)) return;
       if (fresh) {
         delayMs = retryMinMs;
         failures = 0;
@@ -562,119 +407,15 @@ export function createTaskService(options: Options) {
     }
   }
 
-  async function settle(reference: string, knownRun?: TaskRun): Promise<void> {
-    const run = await store.run(sessionId, reference);
-    if (!run || TERMINAL.has(run.state)) return;
-    const runId = run.provider_run_id ?? knownRun?.run_id;
-    if (!runId) return;
-    let providerRun = knownRun;
-    if (!providerRun) {
-      try {
-        providerRun = await (await client()).taskRun.retrieve(runId, { maxRetries: 0 });
-      } catch (err) {
-        log(`status check for ${reference} failed: ${errorText(err) ?? "unknown error"}`);
-      }
-    }
-    const status = runStatus(providerRun);
-    if (ACTIVE.has(status)) return;
-    if (!TERMINAL.has(status)) {
-      log(`run ${reference} reported an unknown status ${status}`);
-      return;
-    }
-
-    if (status === "completed") {
-      let result: TaskRunResult | undefined;
-      try {
-        result = await (await client()).taskRun.result(runId, { timeout: 0 }, { maxRetries: 0, timeout: 60_000 });
-      } catch (err) {
-        log(`result fetch for ${reference} failed: ${errorText(err) ?? "unknown error"}`);
-      }
-      const stateOutput = (await latestStateEvent(reference)) as { output?: TaskRunResult["output"] } | undefined;
-      const output = result?.output ?? stateOutput?.output;
-      if (!output) {
-        // A completed run is final: committing it without output would lose the result for good.
-        // Leave it open so collection retries, and give up only after repeated failures.
-        const attempts = (resultAttempts.get(reference) ?? 0) + 1;
-        resultAttempts.set(reference, attempts);
-        if (attempts < RESULT_ATTEMPTS) return;
-      }
-      resultAttempts.delete(reference);
-      const { evidence, citations } = outputEvidence(output);
-      const summary = summarizeOutput(output, evidence.filter(item => item.kind === "source").length);
-      const completion = await store.completeRun({
-        sessionId, reference, state: "completed", summary,
-        providerRunId: runId,
-        providerInteractionId: providerRun?.interaction_id ?? undefined,
-        rawResult: result ?? stateOutput ?? { run: providerRun },
-        evidence,
-        citations,
-        alerts: [{
-          kind: "completion",
-          headline: `Research completed: ${summary}`,
-          body: completionBody(reference, evidence),
-          dedup_key: `task-complete:${reference}`,
-        }],
-      }).catch(err => {
-        log(`completion for ${reference} could not be committed: ${errorText(err) ?? "unknown error"}`);
-        return undefined;
-      });
-      if (completion) options.onAlerts();
-      return;
-    }
-
-    const reason = errorText((providerRun as { error?: unknown } | undefined)?.error) ?? status;
-    const state: RunState = status === "failed" ? "failed" : status === "cancelled" ? "cancelled" : "action_required";
-    const alert: AlertInput = {
-      kind: status === "failed" ? "failure" : "action_required",
-      headline: status === "failed" ? `Research failed: ${oneLine(reason, 120)}` : `Research needs attention: ${status.replace(/_/g, " ")}`,
-      body: `Run ${reference} ended as ${status}${reason && reason !== status ? `: ${reason}` : ""}. Read what it stored with web_recall { reference: "${reference}" }.`,
-      dedup_key: `task-${state}:${reference}`,
-    };
-    await store.completeRun({
-      sessionId, reference, state,
-      error: reason,
-      providerRunId: runId,
-      providerInteractionId: providerRun?.interaction_id ?? run.provider_interaction_id,
-      rawResult: { run: providerRun },
-      alerts: [alert],
-    }).catch(err => log(`terminal state for ${reference} could not be committed: ${errorText(err) ?? "unknown error"}`));
-    options.onAlerts();
-  }
-
-  async function latestStateEvent(reference: string): Promise<unknown> {
-    return (await store.latestObservations(sessionId, reference, { eventType: "task_run.state", limit: 1 }))[0]?.payload;
-  }
-
-  function completionBody(reference: string, evidence: EvidenceInput[]): string {
-    const sources = evidence.filter(item => item.kind === "source").length;
-    const fields = evidence.filter(item => item.kind === "structured").length;
-    const parts = [sources ? `${sources} cited source(s)` : undefined, fields ? `${fields} structured field(s)` : undefined].filter(Boolean);
-    return [
-      `Run ${reference} completed${parts.length ? ` with ${parts.join(" and ")}` : ""}.`,
-      `Read the report with web_recall { reference: "${reference}" }, or read one item by handle.`,
-    ].join(" ");
-  }
-
-  /** Ask the provider about one run and settle it if it is no longer active. */
+  /** Ask the provider about one run and hand the answer to the lifecycle. Returns whether the run settled. */
   async function reconcileRun(reference: string): Promise<boolean> {
     const run = await store.run(sessionId, reference);
-    if (!run || !run.provider_run_id) return false;
-    if (run.state !== "accepted" && run.state !== "pending" && run.state !== "uncertain") return false;
+    if (!run?.provider_run_id) return false;
+    if (TERMINAL_RUN_STATES.has(run.state)) return true;
     try {
       const providerRun = await (await client()).taskRun.retrieve(run.provider_run_id, { maxRetries: 0 });
-      await store.bindProviderRun({
-        sessionId, reference, providerRunId: run.provider_run_id,
-        interactionId: providerRun.interaction_id ?? undefined,
-        state: runStatus(providerRun) === "running" ? "pending" : run.state === "uncertain" ? "uncertain" : "accepted",
-      });
-      if (runStatus(providerRun) === "running") await startSchedule(reference, run.processor ?? TASK_FLOOR);
-      if (TERMINAL.has(runStatus(providerRun))) {
-        await settle(reference, providerRun);
-        // Settled only when the terminal state was committed; otherwise collection keeps trying.
-        const after = await store.run(sessionId, reference);
-        return after !== undefined && TERMINAL.has(after.state);
-      }
-      return false;
+      const { open } = await lifecycle.observed(reference, await factFor(run.provider_run_id, providerRun, reference));
+      return !open;
     } catch (err) {
       log(`reconciliation for ${reference} failed: ${errorText(err) ?? "unknown error"}`);
       return false;
@@ -697,11 +438,7 @@ export function createTaskService(options: Options) {
         if (!run) continue;
         const metadata = (run as { metadata?: Record<string, unknown> | null }).metadata;
         if (metadata?.webtasks_ref !== reference) continue;
-        await store.bindProviderRun({
-          sessionId, reference, providerRunId: run.run_id, interactionId: run.interaction_id ?? undefined,
-          groupId: group.group_id,
-          state: runStatus(run) === "running" ? "pending" : runStatus(run) === "queued" ? "accepted" : "uncertain",
-        });
+        await lifecycle.bound(reference, { providerRunId: run.run_id, groupId: group.group_id, interactionId: run.interaction_id ?? undefined });
         controller.abort();
         return true;
       }
@@ -713,67 +450,22 @@ export function createTaskService(options: Options) {
     return false;
   }
 
-  /** Session start: settle what finished while Pi was closed, resume what is still active. */
+  /** Session start: settle what finished while Pi was closed, resume what is still open. */
   async function reconcile(): Promise<void> {
-    const runs = (await store.listRuns(sessionId, { states: ["submitting", "accepted", "pending", "uncertain"], limit: 200 })).filter(run => run.kind === "task");
+    const runs = (await store.listRuns(sessionId, { states: [...OPEN_RUN_STATES], limit: 200 })).filter(run => run.kind === "task");
     for (const run of runs) {
       if (stopping) return;
-      if (!run.provider_run_id) {
-        if (run.state === "submitting" || run.state === "uncertain") await recoverUnbound(run.reference);
-      }
+      if (!run.provider_run_id && UNCONFIRMED_RUN_STATES.has(run.state)) await recoverUnbound(run.reference);
       const settled = await reconcileRun(run.reference);
       if (!settled) void track(run.reference);
     }
     options.onAlerts();
   }
 
-  /** Queue due progress alerts and advance their schedules. */
+  /** Queue due progress alerts. */
   async function tick(): Promise<void> {
-    if (ticking || stopping) return;
-    ticking = true;
-    try {
-      const due = await store.runsNeedingProgress(sessionId, now());
-      for (const run of due) {
-        const intervalMs = run.alert_interval_ms ?? scheduleFor(run.processor ?? TASK_FLOOR);
-        const latest = await latestProgress(run.reference);
-        const sources = latest.sources;
-        const headline = sources !== undefined
-          ? `Research still running (${run.processor ?? TASK_FLOOR}): ${sources} source(s) considered`
-          : `Research still running (${run.processor ?? TASK_FLOOR})`;
-        await store.enqueueAlert(sessionId, run.reference, {
-          kind: "progress",
-          headline,
-          body: [
-            latest.finding ? `Latest finding: ${oneLine(latest.finding, 220)}` : latest.message ? `Latest activity: ${oneLine(latest.message, 220)}` : "No new details yet; the run is still active.",
-            `Partial evidence so far: web_recall { reference: "${run.reference}" }.`,
-          ].join(" "),
-          dedup_key: `task-progress:${run.reference}:${Math.floor(now() / intervalMs)}`,
-        });
-        await store.advanceProgress(sessionId, run.reference, now() + intervalMs);
-      }
-      if (due.length) options.onAlerts();
-    } finally {
-      ticking = false;
-    }
-  }
-
-  async function latestProgress(reference: string): Promise<{ sources?: number; message?: string; finding?: string }> {
-    // Newest first: the first value of each kind is the latest one.
-    const events = await store.latestObservations(sessionId, reference, { limit: 100 });
-    let sources: number | undefined;
-    let message: string | undefined;
-    let finding: string | undefined;
-    for (const event of events) {
-      const payload = event.payload as { source_stats?: { num_sources_considered?: number | null }; num_sources_considered?: number | null; message?: string };
-      const considered = payload?.source_stats?.num_sources_considered ?? payload?.num_sources_considered;
-      if (sources === undefined && typeof considered === "number") sources = considered;
-      if (typeof payload?.message === "string") {
-        message ??= payload.message;
-        if (finding === undefined && event.eventType.endsWith(".result")) finding = payload.message;
-      }
-      if (sources !== undefined && message !== undefined && finding !== undefined) break;
-    }
-    return { sources, message, finding };
+    if (stopping) return;
+    await lifecycle.tick();
   }
 
   function start(): void {

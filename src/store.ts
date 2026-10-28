@@ -51,8 +51,30 @@ export type RunState =
   | "action_required"
   | "uncertain";
 
-/** Terminal provider/local states. `uncertain` is deliberately not terminal: it needs reconciliation. */
-export const TERMINAL_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["completed", "failed", "cancelled", "action_required"]);
+/**
+ * The run state vocabulary. Every list of states in this file's SQL and in its
+ * callers is one of these sets; nothing spells a state list inline.
+ *
+ *  - Terminal: settlement commits it and nothing moves a run out of it.
+ *    `uncertain` is not terminal (it is reconciled), and neither is
+ *    `action_required` (it is alerted once and stays watched).
+ *  - Open: every other state. A Task run in an open state is reconciled at
+ *    session start and counted as research in progress.
+ *  - Unconfirmed: Parallel has not confirmed the run exists. Any provider fact
+ *    about a bound run confirms it, which makes it `accepted`.
+ *  - In flight: recorded, and possibly sent, but never answered.
+ */
+export const TERMINAL_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["completed", "failed", "cancelled"]);
+export const OPEN_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(
+  ["intent", "submitting", "accepted", "pending", "action_required", "uncertain"],
+);
+export const UNCONFIRMED_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting", "uncertain"]);
+export const IN_FLIGHT_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting"]);
+
+/** A state set as an SQL list. The values are the fixed literals above, never input. */
+function sqlStates(states: ReadonlySet<RunState>): string {
+  return [...states].map(state => `'${state}'`).join(",");
+}
 
 /**
  * What kind of received item this is. `report` and `structured` are provider
@@ -437,7 +459,8 @@ function clamp(value: number | undefined, fallback: number, min: number, max: nu
 
 export class ResearchStore {
   private readonly dir: string;
-  private readonly now: () => number;
+  /** The store's clock: the only clock for run timestamps and the progress timetable. */
+  readonly now: () => number;
   private db?: DatabaseSync;
   private opening?: Promise<DatabaseSync>;
   private statements = new Map<string, StatementSync>();
@@ -637,7 +660,13 @@ export class ResearchStore {
     });
   }
 
-  /** Bind the provider run id after an accepted submission. Idempotent for the same run. */
+  /**
+   * Bind the provider run id that Parallel confirmed for this run. Idempotent
+   * for the same run.
+   *
+   * Confirmation is a fact about existence: an unconfirmed run becomes
+   * `accepted`, and any other state is kept. A terminal run is never reopened.
+   */
   async bindProviderRun(input: {
     sessionId: string;
     reference: string;
@@ -645,7 +674,6 @@ export class ResearchStore {
     providerSessionId?: string;
     interactionId?: string;
     groupId?: string;
-    state?: RunState;
   }): Promise<void> {
     await this.connect();
     const now = this.now();
@@ -657,44 +685,94 @@ export class ResearchStore {
       this.stmt(
         `UPDATE runs SET provider_run_id = ?, provider_session_id = COALESCE(?, provider_session_id),
                          provider_interaction_id = COALESCE(?, provider_interaction_id),
-                         group_id = COALESCE(?, group_id), state = ?, updated_at = ? WHERE reference = ?`,
+                         group_id = COALESCE(?, group_id),
+                         state = CASE WHEN state IN (${sqlStates(UNCONFIRMED_RUN_STATES)}) THEN 'accepted' ELSE state END,
+                         updated_at = ? WHERE reference = ?`,
       ).run(
         input.providerRunId, input.providerSessionId ?? null, input.interactionId ?? null,
-        input.groupId ?? null, input.state ?? "accepted", now, input.reference,
+        input.groupId ?? null, now, input.reference,
       );
     });
   }
 
   /**
-   * Start the progress timetable for a running Task. The interval is guidance
-   * derived from published processor latency, never a deadline or a percentage.
+   * A Task run is running: it becomes `pending` and its progress timetable runs.
+   * The first call starts the timetable with `intervalMs`; a run that comes back
+   * from `action_required` restarts its next alert one interval from now. The
+   * interval is guidance from published processor latency, never a deadline.
+   *
+   * A late "running" observation never reopens a terminal run. Returns whether
+   * the run changed.
    */
-  async markRunning(sessionId: string, reference: string, schedule: { runningAt: number; intervalMs: number; nextAlertAt: number }): Promise<void> {
+  async markRunning(sessionId: string, reference: string, intervalMs: number): Promise<boolean> {
     await this.connect();
-    this.tx(() => {
+    const now = this.now();
+    return this.tx(() => {
       this.requireRun(sessionId, reference);
-      // A late "running" observation must never reopen a run that already settled.
-      this.stmt(
-        `UPDATE runs SET running_at = ?, alert_interval_ms = ?, next_alert_at = ?, state = 'pending', updated_at = ?
-         WHERE reference = ? AND state IN ('intent','submitting','accepted','pending','uncertain')`,
-      ).run(schedule.runningAt, schedule.intervalMs, schedule.nextAlertAt, schedule.runningAt, reference);
+      const info = this.stmt(
+        `UPDATE runs SET running_at = COALESCE(running_at, ?),
+                         alert_interval_ms = COALESCE(alert_interval_ms, ?),
+                         next_alert_at = CASE WHEN running_at IS NULL OR next_alert_at IS NULL OR state = 'action_required'
+                                              THEN ? + COALESCE(alert_interval_ms, ?) ELSE next_alert_at END,
+                         state = 'pending', terminal_at = NULL, updated_at = ?
+         WHERE reference = ? AND session_id = ? AND state IN (${sqlStates(OPEN_RUN_STATES)})
+           AND NOT (state = 'pending' AND running_at IS NOT NULL)`,
+      ).run(now, intervalMs, now, intervalMs, now, reference, sessionId);
+      return Number(info.changes) > 0;
     });
   }
 
-  /** Non-terminal Task runs whose next scheduled progress update is due. */
-  async runsNeedingProgress(sessionId: string, now: number): Promise<RunRecord[]> {
+  /**
+   * Move an open run between open states, and queue its alert in the same
+   * transaction. Nothing changes unless the run is in one of `from`, so a
+   * repeated observation neither repeats the move nor the alert. Returns whether
+   * the run moved.
+   */
+  async transitionRun(input: {
+    sessionId: string;
+    reference: string;
+    from: ReadonlySet<RunState>;
+    to: RunState;
+    error?: string;
+    alert?: AlertInput;
+  }): Promise<boolean> {
+    if (TERMINAL_RUN_STATES.has(input.to)) throw new StoreError("invalid", "A terminal state is committed by completeRun");
+    await this.connect();
+    const now = this.now();
+    return this.tx(() => {
+      const run = this.requireRun(input.sessionId, input.reference);
+      if (!input.from.has(run.state) || TERMINAL_RUN_STATES.has(run.state)) return false;
+      this.applyRunState(input.reference, input.to, now, undefined, input.error);
+      if (input.alert) this.upsertAlert(input.sessionId, input.reference, input.alert, now);
+      return true;
+    });
+  }
+
+  /** Running Task runs whose next progress alert is due by the store's clock. */
+  async runsNeedingProgress(sessionId: string): Promise<RunRecord[]> {
     await this.connect();
     const rows = this.stmt(
-      `SELECT * FROM runs WHERE session_id = ? AND kind = 'task' AND state IN ('accepted','pending')
+      `SELECT * FROM runs WHERE session_id = ? AND kind = 'task' AND state = 'pending'
          AND next_alert_at IS NOT NULL AND next_alert_at <= ? ORDER BY next_alert_at LIMIT 50`,
-    ).all(sessionId, now) as Record<string, unknown>[];
+    ).all(sessionId, this.now()) as Record<string, unknown>[];
     return rows.map(row => this.toRun(row));
   }
 
-  /** Advance a run's progress schedule after an alert is queued. */
-  async advanceProgress(sessionId: string, reference: string, nextAlertAt: number): Promise<void> {
+  /**
+   * Queue one progress alert and advance the run's timetable by one interval,
+   * in one transaction: a failure leaves both undone, so the alert is neither
+   * lost nor queued twice. Returns false when the run is no longer running.
+   */
+  async queueProgress(sessionId: string, reference: string, alert: AlertInput): Promise<boolean> {
     await this.connect();
-    this.stmt(`UPDATE runs SET next_alert_at = ? WHERE reference = ? AND session_id = ?`).run(nextAlertAt, reference, sessionId);
+    const now = this.now();
+    return this.tx(() => {
+      const run = this.requireRun(sessionId, reference);
+      if (run.state !== "pending" || run.alert_interval_ms === undefined) return false;
+      this.upsertAlert(sessionId, reference, alert, now);
+      this.stmt(`UPDATE runs SET next_alert_at = ? WHERE reference = ?`).run(now + run.alert_interval_ms, reference);
+      return true;
+    });
   }
 
   /** Reading a run's evidence is real evidence that its alerts were received. */
@@ -813,7 +891,7 @@ export class ResearchStore {
     const cutoff = now - Math.max(0, options.olderThanMs ?? 60_000);
     const info = this.stmt(
       `UPDATE runs SET state = 'uncertain', error = COALESCE(error, 'interrupted before the result was stored'), updated_at = ?
-       WHERE session_id = ? AND state IN ('intent','submitting')
+       WHERE session_id = ? AND state IN (${sqlStates(IN_FLIGHT_RUN_STATES)})
          AND kind IN ('search','extract','answer') AND updated_at <= ?`,
     ).run(now, sessionId, cutoff);
     return Number(info.changes);
@@ -964,7 +1042,7 @@ export class ResearchStore {
   async completeRun(input: {
     sessionId: string;
     reference: string;
-    state: "completed" | "failed" | "cancelled" | "action_required";
+    state: "completed" | "failed" | "cancelled";
     evidence?: EvidenceInput[];
     citations?: CitationInput[];
     alerts?: AlertInput[];

@@ -14,7 +14,8 @@ import { Type } from "typebox";
 import { DEFAULT_SEARCH_MODE, SEARCH_MODES, type ResearchService } from "./research-service.ts";
 import type { RecallService } from "./recall.ts";
 import { EVIDENCE_KIND_NAMES, type EvidenceKind } from "./store.ts";
-import { TASK_CEILING, TASK_PROCESSORS, type TaskService } from "./task-service.ts";
+import { TASK_CEILING, type TaskService } from "./task-service.ts";
+import { TASK_PROCESSORS } from "./task-run-lifecycle.ts";
 import { ANSWER_EFFORTS, DEFAULT_ANSWER_EFFORT, type AnswerService } from "./answer-service.ts";
 import type { StatusLane, WebtasksStatus } from "./status.ts";
 

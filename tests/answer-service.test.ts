@@ -85,7 +85,7 @@ test("a follow-up continues the provider conversation through the local referenc
   const foreign = await h.store.beginRun({ sessionId: "s1", intentKey: "call-3", intent: {}, kind: "task", state: "accepted" });
   await assert.rejects(
     () => h.service.answer({ question: "x", continue_from: foreign.reference }, { invocationId: "call-4" }),
-    /only answers can be continued/,
+    /is not an earlier web_answer/,
   );
   assert.equal(h.calls.length, 2, "an invalid continuation never reaches the provider");
 });
@@ -97,7 +97,7 @@ test("a replayed invocation returns the stored answer instead of asking again", 
   assert.equal(h.calls.length, 1);
   assert.equal(replay.details.replayed, true);
   assert.equal(replay.details.reference, first.details.reference);
-  assert.match(replay.text, /already answered/);
+  assert.match(replay.text, /already asked as run_\w+ .*it is not sent again/);
   assert.match(replay.text, /The answer is 42/);
 });
 
@@ -115,11 +115,11 @@ test("a definite rejection is failed; an ambiguous response is uncertain", async
   assert.equal((await rejected.store.listRuns("s1"))[0]!.state, "failed");
 
   const broken = await harness(t, () => { throw Object.assign(new Error("socket hang up"), { name: "APIConnectionError" }); });
-  await assert.rejects(() => broken.service.answer({ question: "q" }, { invocationId: "call-1" }), /may have been processed remotely/);
+  await assert.rejects(() => broken.service.answer({ question: "q" }, { invocationId: "call-1" }), /outcome is unknown/);
   assert.equal((await broken.store.listRuns("s1"))[0]!.state, "uncertain");
 
   const empty = await harness(t, () => ({ id: "resp_x", status: "completed", output_text: "  " }));
-  await assert.rejects(() => empty.service.answer({ question: "q" }, { invocationId: "call-1" }), /Answer was empty/);
+  await assert.rejects(() => empty.service.answer({ question: "q" }, { invocationId: "call-1" }), /answer came back empty/);
   assert.equal((await empty.store.listRuns("s1"))[0]!.state, "failed");
 });
 

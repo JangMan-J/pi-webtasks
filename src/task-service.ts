@@ -64,7 +64,7 @@ export function validateProcessor(value: string | undefined): TaskProcessor {
   const chosen = (value?.trim() || process.env.WEBTASKS_TASK_PROCESSOR?.trim() || TASK_FLOOR);
   if ((TASK_PROCESSORS as readonly string[]).includes(chosen)) return chosen as TaskProcessor;
   throw new Error(
-    `processor must be one of ${TASK_PROCESSORS.join(", ")}. core is the floor for research tasks; lite and base are too weak, and anything above ${TASK_CEILING} needs an explicit user decision outside the model's call.`,
+    `processor must be one of ${TASK_PROCESSORS.join(", ")}.`,
   );
 }
 
@@ -261,8 +261,7 @@ export function createTaskService(options: Options) {
     const existing = await store.search(sessionId, { reference, limit: 20 });
     const lines = replayed
       ? [
-        `This research call was already submitted locally as ${reference} (state: ${state}).`,
-        "It is not sent again: a paid submission is never repeated under the same invocation.",
+        `This research job was already submitted as ${reference} (state: ${state}); it is not sent again.`,
         contract ? `Contract: ${contract}` : undefined,
         existing.hits.length ? `Stored evidence so far: ${existing.hits.length} item(s).` : "No evidence is stored for it yet.",
         ...existing.hits.map(hit => `- ${hit.handle} (${hit.kind}) ${hit.title ?? hit.url ?? ""}`.trimEnd()),
@@ -270,9 +269,9 @@ export function createTaskService(options: Options) {
       : [
         `Research submitted: ${reference} (${processor}, ${kind}).`,
         contract ? `Contract: ${contract}` : undefined,
-        "It runs in the background. A progress update and a completion alert will arrive; continue other work meanwhile.",
-        "Do not resubmit: a replay of this invocation returns this same record.",
-        `Read partial findings as they arrive with web_recall { reference: "${reference}" }.`,
+        "It runs in the background, and results usually take 5-15 minutes: progress updates and a completion alert arrive as messages, even after you end your turn.",
+        "Keep working on the other parts of the task meanwhile. When nothing else is left, tell the user the research is running and end your turn; the completion alert brings you back.",
+        `Read partial findings as they arrive with web_recall { reference: "${reference}" }. This job is submitted once; there is nothing to poll or resubmit.`,
       ].filter((line): line is string => line !== undefined);
     return {
       text: lines.join("\n"),
@@ -284,7 +283,7 @@ export function createTaskService(options: Options) {
     const run = await store.run(sessionId, reference);
     if (!run) throw new Error(`${reference} is not a research record in this session`);
     const id = run.provider_interaction_id ?? (run.kind === "answer" ? run.provider_run_id : undefined);
-    if (!id) throw new Error(`${reference} has no provider context to continue from (state: ${run.state})`);
+    if (!id) throw new Error(`${reference} cannot be continued yet (state: ${run.state}); continue from a completed web_research run or web_answer`);
     return id;
   }
 
@@ -399,7 +398,7 @@ export function createTaskService(options: Options) {
         { maxRetries: 0 },
       );
       runId = added.run_ids?.[0];
-      if (!runId) throw new Error("The provider accepted the request without returning a run id");
+      if (!runId) throw new Error("Parallel accepted the job without returning a run");
       // Bind the accepted run before anything else can fail: from here on it exists and is paid for.
       await store.bindProviderRun({ sessionId, reference, providerRunId: runId, groupId, state: "accepted" });
       if (added.event_cursor) await store.setGroupCursor(sessionId, added.event_cursor);
@@ -413,8 +412,8 @@ export function createTaskService(options: Options) {
       throw new Error(
         `Research submission did not complete: ${errorText(err) ?? "unknown error"}. ` +
         `${uncertain
-          ? `The provider may have accepted it; local record ${reference} is uncertain and will be reconciled, not resubmitted.`
-          : `Local record ${reference}.`}`,
+          ? `It may have started anyway: ${reference} is being checked and reports its result if it did, so it needs no new submission.`
+          : `Record ${reference}.`}`,
       );
     }
 
@@ -631,7 +630,7 @@ export function createTaskService(options: Options) {
     const alert: AlertInput = {
       kind: status === "failed" ? "failure" : "action_required",
       headline: status === "failed" ? `Research failed: ${oneLine(reason, 120)}` : `Research needs attention: ${status.replace(/_/g, " ")}`,
-      body: `Run ${reference} ended as ${status}${reason && reason !== status ? `: ${reason}` : ""}. Do not resubmit it; read what was stored with web_recall { reference: "${reference}" }.`,
+      body: `Run ${reference} ended as ${status}${reason && reason !== status ? `: ${reason}` : ""}. Read what it stored with web_recall { reference: "${reference}" }.`,
       dedup_key: `task-${state}:${reference}`,
     };
     await store.completeRun({

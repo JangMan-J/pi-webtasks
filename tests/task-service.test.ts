@@ -112,7 +112,8 @@ test("submission carries an explicit text schema, events, metadata, and the core
   assert.deepEqual(input.task_spec, { output_schema: { type: "text", description: "A comparison of advisory locking with cited sources" } }, "the caller states the output contract explicitly");
   assert.match(receipt.text, /Research submitted: run_[0-9a-f]{16} \(core, cited text report\)/);
   assert.match(receipt.text, /Contract: core; text report: "A comparison of advisory locking/);
-  assert.match(receipt.text, /Do not resubmit/);
+  assert.match(receipt.text, /submitted once; there is nothing to poll or resubmit/);
+  assert.match(receipt.text, /end your turn; the completion alert brings you back/, "the receipt says what to do while the run works");
   assert.match(receipt.text, /web_recall \{ reference/);
 
   const run = await h.store.run("s1", String(receipt.details.reference));
@@ -144,7 +145,7 @@ test("processor policy: core floor, ultra2x ceiling, no silent substitution", as
   assert.equal(validateProcessor("ultra2x"), "ultra2x");
   for (const bad of ["lite", "base", "ultra4x", "ultra8x", "pro-fast", ""]) {
     if (bad === "") continue;
-    assert.throws(() => validateProcessor(bad), /core is the floor/);
+    assert.throws(() => validateProcessor(bad), /^Error: processor must be one of core, core2x, pro, ultra, ultra2x\.$/, "the error names the choices, not the extension's policy");
   }
   process.env.WEBTASKS_TASK_PROCESSOR = "pro";
   try {
@@ -154,8 +155,8 @@ test("processor policy: core floor, ultra2x ceiling, no silent substitution", as
   }
 
   const h = await harness(t);
-  await assert.rejects(() => h.service.submit({ input: "x", processor: "lite" }, { invocationId: "bad-1" }), /core is the floor/);
-  await assert.rejects(() => h.service.submit({ input: "x", processor: "ultra4x" }, { invocationId: "bad-2" }), /core is the floor/);
+  await assert.rejects(() => h.service.submit({ input: "x", processor: "lite" }, { invocationId: "bad-1" }), /processor must be one of core, core2x, pro, ultra, ultra2x\./);
+  await assert.rejects(() => h.service.submit({ input: "x", processor: "ultra4x" }, { invocationId: "bad-2" }), /processor must be one of core, core2x, pro, ultra, ultra2x\./);
   assert.equal(h.calls.adds.length, 0, "a rejected processor never reaches the provider");
   assert.deepEqual(await h.store.listRuns("s1"), [], "and records no paid intent");
 });
@@ -289,7 +290,7 @@ test("a failed run stores the failure and alerts without pretending there is out
   const alerts = await h.store.alerts("s1");
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0]!.kind, "failure");
-  assert.match(alerts[0]!.body ?? "", /Do not resubmit/);
+  assert.match(alerts[0]!.body ?? "", /Read what it stored with web_recall/);
 });
 
 test("progress alerts follow the processor timetable and coalesce per interval", async t => {

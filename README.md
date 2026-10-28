@@ -16,15 +16,23 @@ Then run `/login` in Pi and choose **Parallel** (see [Credentials](#credentials)
 
 ## Status
 
-Five tools:
+Five tools, split by who writes the answer. The agent writes it from pages it
+reads (`web_search`, `web_fetch`), or a Parallel research agent writes it
+(`web_answer`, `web_research`):
 
 | Tool | Work |
 | --- | --- |
-| `web_search` | Find web sources for an objective and 1-3 keyword queries, store them, and return handles. |
-| `web_fetch` | Read known http(s) URLs into the same store, with optional full content. |
-| `web_answer` | Get a cited answer now, and ask follow-ups that keep the same context. |
-| `web_research` | Run a background Task with `core` as the floor and `ultra2x` as the ceiling; progress and completion arrive as alerts. |
+| `web_search` | Find pages for an objective and 1-3 keyword queries; store the ranked sources and excerpts and return handles. |
+| `web_fetch` | Read known http(s) URLs (pages, PDFs) into the same store, as focused excerpts or full content. |
+| `web_answer` | Ask Parallel's research agent (Responses API) for a cited answer in seconds, and follow up in the same conversation. |
+| `web_research` | Hand a research job to Parallel's deep-research agent (Task API) in the background: a cited report or structured fields with per-field citations. `core` is the processor floor and `ultra2x` the most an agent may choose; progress and completion arrive as alerts. |
 | `web_recall` | Search stored evidence, or read one item by handle in bounded slices. |
+
+The agent-facing wording (tool descriptions, guidelines, receipts, and errors)
+describes Parallel's capabilities and what to do next. It does not expose the
+extension's policies or plumbing: processor limits, event streams, and the
+store stay internal. `tests/tool-wording.test.ts` checks that every guideline
+names its own tool, because Pi merges all guidelines into one list.
 
 There are no webhooks, no background receiver, no artifact files, and no awkward
 effort tiers. Collection happens inside Pi; if Pi is closed, collection stops

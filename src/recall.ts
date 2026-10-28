@@ -43,10 +43,10 @@ function compact(text: string, limit = SNIPPET_PREVIEW): string {
 
 function originLabel(origin: EvidenceOrigin): string {
   switch (origin) {
-    case "provider_report": return "provider report";
-    case "provider_structured": return "provider structured output";
-    case "provider_finding": return "intermediate provider finding";
-    case "provider_source": return "retrieved source text";
+    case "provider_report": return "written by Parallel's research agent";
+    case "provider_structured": return "structured output from Parallel's research agent";
+    case "provider_finding": return "interim finding from Parallel's research agent";
+    case "provider_source": return "text from the source";
   }
 }
 
@@ -82,7 +82,7 @@ export function createRecallService({ store, sessionId }: Options) {
       const lines = [
         `${slice.handle} — ${slice.kind}, ${originLabel(slice.origin)}${slice.title ? `: ${slice.title}` : ""}`,
         slice.url ? `URL: ${slice.url}` : undefined,
-        `Record: ${slice.reference}${slice.pointer ? ` (${slice.pointer})` : ""}`,
+        `Record: ${slice.reference}`,
         `Stored text: ${slice.total_chars.toLocaleString("en-US")} chars; showing ${slice.offset.toLocaleString("en-US")}–${(slice.offset + slice.text.length).toLocaleString("en-US")}.`,
         "",
         slice.text,

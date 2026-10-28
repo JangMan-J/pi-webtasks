@@ -141,8 +141,8 @@ export function createAnswerService({ store, sessionId, client }: Options) {
   async function continuationId(reference: string): Promise<string> {
     const run = await store.run(sessionId, reference);
     if (!run) throw new Error(`${reference} is not a research record in this session`);
-    if (run.kind !== "answer") throw new Error(`${reference} is not an earlier answer; only answers can be continued through this API`);
-    if (!run.provider_run_id) throw new Error(`${reference} has no provider response id to continue from`);
+    if (run.kind !== "answer") throw new Error(`${reference} is not an earlier web_answer; continue a web_research run with web_research { continue_from }`);
+    if (!run.provider_run_id) throw new Error(`${reference} has no completed answer to continue from (state: ${run.state})`);
     return run.provider_run_id;
   }
 
@@ -173,8 +173,7 @@ export function createAnswerService({ store, sessionId, client }: Options) {
       const body = first ? (await store.readEvidence(sessionId, first.handle, { limit: RECEIPT_LIMIT })).text : "";
       return {
         text: [
-          `This question was already answered locally as ${begun.reference} (state: ${run?.state ?? "unknown"}).`,
-          "It is not sent again: a paid request is never repeated under the same invocation.",
+          `This question was already asked as ${begun.reference} (state: ${run?.state ?? "unknown"}); it is not sent again.`,
           body || `Read it with web_recall { reference: "${begun.reference}" }.`,
         ].join("\n"),
         details: { reference: begun.reference, state: run?.state, replayed: true, handle: first?.handle },
@@ -216,20 +215,20 @@ export function createAnswerService({ store, sessionId, client }: Options) {
       await store.setRunState({ sessionId, reference, state: uncertain ? "uncertain" : "failed", error: message }).catch(() => undefined);
       throw new Error(
         `Answer did not complete: ${message}. ${uncertain
-          ? `The request may have been processed remotely; local record ${reference} is uncertain. Do not repeat it blindly.`
-          : `Local record ${reference}.`}`,
+          ? `Its outcome is unknown (record ${reference}); ask again only if you still need the answer.`
+          : `Record ${reference}.`}`,
       );
     }
 
     const id = typeof response.id === "string" ? response.id : undefined;
     if (!id) {
       await store.setRunState({ sessionId, reference, state: "uncertain", error: "response carried no id" }).catch(() => undefined);
-      throw new Error(`Answer did not return a response id; local record ${reference} is uncertain.`);
+      throw new Error(`The answer came back incomplete (record ${reference}); ask again if you still need it.`);
     }
     const text = answerText(response);
     if (!text.trim()) {
       await store.setRunState({ sessionId, reference, state: "failed", error: "response carried no answer text" }).catch(() => undefined);
-      throw new Error(`Answer was empty; local record ${reference}.`);
+      throw new Error(`The answer came back empty (record ${reference}).`);
     }
 
     const { evidence, citations } = evidenceFromAnswer(text, annotations(response));

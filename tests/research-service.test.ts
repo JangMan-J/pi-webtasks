@@ -141,7 +141,7 @@ test("a replayed invocation returns stored evidence instead of paying twice", as
   assert.equal(h.calls.length, 1, "the provider is called exactly once");
   assert.equal(replay.details.replayed, true);
   assert.equal(replay.details.reference, first.details.reference);
-  assert.match(replay.text, /already submitted/);
+  assert.match(replay.text, /already ran as run_\w+ .*it is not sent again/)
   assert.match(replay.text, /not sent again/);
   assert.match(replay.text, /ev_[0-9a-f]{16}/, "the replay still surfaces readable handles");
   assert.equal((await h.store.listRuns("s1")).length, 1);
@@ -159,7 +159,7 @@ test("a connection failure leaves an uncertain record and refuses to hide it", a
       throw error;
     },
   });
-  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /may have been processed remotely; do not repeat/);
+  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
   const runs = await h.store.listRuns("s1");
   assert.equal(runs.length, 1);
   assert.equal(runs[0]!.state, "uncertain", "an ambiguous outcome is not recorded as failed");
@@ -173,7 +173,7 @@ test("a definite rejection settles the record as failed", async t => {
       throw error;
     },
   });
-  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /Search did not complete: invalid request\. Local record run_/);
+  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /Search did not complete: invalid request\. Record run_/);
   const runs = await h.store.listRuns("s1");
   assert.equal(runs[0]!.state, "failed");
   assert.equal(runs[0]!.error, "invalid request");
@@ -183,13 +183,13 @@ test("a 5xx or timeout is uncertain, not a clean failure", async t => {
   const h = await harness(t, {
     search: async () => { throw Object.assign(new Error("upstream unavailable"), { status: 503, name: "InternalServerError" }); },
   });
-  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /do not repeat/);
+  await assert.rejects(() => h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
   assert.equal((await h.store.listRuns("s1"))[0]!.state, "uncertain");
 
   const timeout = await harness(t, {
     search: async () => { throw Object.assign(new Error("timed out"), { name: "APIConnectionTimeoutError" }); },
   });
-  await assert.rejects(() => timeout.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /do not repeat/);
+  await assert.rejects(() => timeout.service.search({ search_queries: ["alpha"] }, { invocationId: "call-1" }), /outcome is unknown/);
   assert.equal((await timeout.store.listRuns("s1"))[0]!.state, "uncertain");
 });
 

@@ -513,7 +513,7 @@ export class ResearchStore {
   }
 
   private requireDb(): DatabaseSync {
-    if (!this.db) throw new StoreError("closed", "The research store is not open");
+    if (!this.db) throw new StoreError("closed", "Stored research evidence is unavailable right now; the session may be restarting");
     return this.db;
   }
 
@@ -617,7 +617,7 @@ export class ResearchStore {
       if (input.parent) {
         const parent = this.stmt(`SELECT session_id FROM runs WHERE reference = ?`).get(input.parent) as { session_id: string } | undefined;
         if (!parent || parent.session_id !== input.sessionId) {
-          throw new StoreError("invalid", `Parent run ${input.parent} is not evidence owned by this session`);
+          throw new StoreError("invalid", `No research record ${input.parent} in this session`);
         }
       }
       const existing = this.stmt(`SELECT reference FROM runs WHERE session_id = ? AND intent_key = ?`).get(input.sessionId, input.intentKey) as

@@ -50,7 +50,7 @@ test("an answer is requested once, cited, stored, and readable", async t => {
   assert.equal(h.calls[0]!.path, "/v1/responses");
   assert.equal(h.calls[0]!.body.model, "parallel");
   assert.equal(h.calls[0]!.body.input, "What is the answer?");
-  assert.deepEqual(h.calls[0]!.body.reasoning, { effort: "low" });
+  assert.deepEqual(h.calls[0]!.body.reasoning, { effort: "medium" }, "an omitted effort uses Parallel's own default");
   assert.equal(h.calls[0]!.body.previous_response_id, undefined);
   assert.equal(h.calls[0]!.maxRetries, 0, "a paid request is never retried");
   assert.match(result.text, /The answer is 42/);

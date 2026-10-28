@@ -29,6 +29,13 @@ test("web_search requires an objective and keyword queries", async () => {
   assert.deepEqual([...tools.get("web_search").parameters.required].sort(), ["objective", "search_queries"]);
 });
 
+test("the answer effort description marks exactly the default the service sends", async () => {
+  const { tools } = await loadTools();
+  const description = tools.get("web_answer").parameters.properties.effort.description;
+  assert.equal(description.match(/\(the default\)/g)?.length, 1);
+  assert.match(description, /medium \(~15-20 s\) for questions that combine several sources \(the default\)/);
+});
+
 test("the search mode description marks exactly the configured default", async () => {
   const { tools } = await loadTools();
   const description = tools.get("web_search").parameters.properties.mode.description;

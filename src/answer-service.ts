@@ -32,6 +32,10 @@ export type AnswerInput = {
   continue_from?: string;
 };
 
+export const ANSWER_EFFORTS = ["low", "medium", "high"] as const;
+/** Parallel's own default; low suits only a fact one good source settles. */
+export const DEFAULT_ANSWER_EFFORT: (typeof ANSWER_EFFORTS)[number] = "medium";
+
 export type AnswerReceipt = { text: string; details: Record<string, unknown> };
 
 type Options = {
@@ -149,8 +153,8 @@ export function createAnswerService({ store, sessionId, client }: Options) {
   async function answer(input: AnswerInput, call: { invocationId: string; signal?: AbortSignal }): Promise<AnswerReceipt> {
     const question = clean(input.question);
     if (!question) throw new Error("question must be a non-empty string");
-    const effort = input.effort ?? "low";
-    if (!["low", "medium", "high"].includes(effort)) throw new Error("effort must be low, medium, or high");
+    const effort = input.effort ?? DEFAULT_ANSWER_EFFORT;
+    if (!(ANSWER_EFFORTS as readonly string[]).includes(effort)) throw new Error("effort must be low, medium, or high");
     const previous = input.continue_from ? await continuationId(clean(input.continue_from)!) : undefined;
     const include = (input.include_domains ?? []).map(domain => domain.trim()).filter(Boolean);
     const exclude = (input.exclude_domains ?? []).map(domain => domain.trim()).filter(Boolean);

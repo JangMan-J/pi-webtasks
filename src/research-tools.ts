@@ -15,7 +15,7 @@ import { DEFAULT_SEARCH_MODE, SEARCH_MODES, type ResearchService } from "./resea
 import type { RecallService } from "./recall.ts";
 import { EVIDENCE_KIND_NAMES, type EvidenceKind } from "./store.ts";
 import { TASK_CEILING, TASK_PROCESSORS, type TaskService } from "./task-service.ts";
-import type { AnswerService } from "./answer-service.ts";
+import { ANSWER_EFFORTS, DEFAULT_ANSWER_EFFORT, type AnswerService } from "./answer-service.ts";
 
 export type ResearchServices = {
   research: ResearchService;
@@ -44,6 +44,14 @@ const CONTEXT = Type.Optional(Type.String({
   minLength: 1,
   description: "Context handle from an earlier web_search or web_fetch receipt in the same task, so related calls share their research context. Omit it to start a new task.",
 }));
+
+const EFFORT_PURPOSE: Record<(typeof ANSWER_EFFORTS)[number], string> = {
+  low: "low (~5-10 s) for a fact one good source settles",
+  medium: "medium (~15-20 s) for questions that combine several sources",
+  high: "high (~30-60 s) for comparisons and questions that need extensive research and synthesis",
+};
+
+const EFFORT_DESCRIPTION = `How much research before answering: ${ANSWER_EFFORTS.map(effort => effort === DEFAULT_ANSWER_EFFORT ? `${EFFORT_PURPOSE[effort]} (the default)` : EFFORT_PURPOSE[effort]).join("; ")}.`;
 
 /** Domain filters mean the same thing on every tool: a hard allow list, or sites to leave out. */
 function domainFilters(preferIn: string) {
@@ -183,7 +191,7 @@ export function registerResearchTools(pi: ExtensionAPI, services: () => Research
     ],
     parameters: Type.Object({
       question: Type.String({ minLength: 1, description: "The complete, self-contained question with every constraint: versions, dates, units, and the context it applies to. With continue_from, a follow-up question." }),
-      effort: Type.Optional(StringEnum(["low", "medium", "high"] as const, { description: "How much research before answering: low (the default, ~5-10 s) for a fact one good source settles; medium (~15-20 s) for questions that combine several sources; high (~30-60 s) for questions that need extensive research and synthesis." })),
+      effort: Type.Optional(StringEnum(ANSWER_EFFORTS, { description: EFFORT_DESCRIPTION })),
       instructions: Type.Optional(Type.String({ description: "How to shape the answer: format, length, audience, or scope (for example \"answer with a table\")." })),
       ...domainFilters("question"),
       continue_from: Type.Optional(Type.String({ minLength: 1, description: "Reference of an earlier web_answer to continue. The agent keeps that conversation, so the question can refer back to it." })),

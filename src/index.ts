@@ -21,6 +21,7 @@ import { createRecallService, type RecallService } from "./recall.ts";
 import { createTaskService, type TaskService } from "./task-service.ts";
 import { createAnswerService, type AnswerService } from "./answer-service.ts";
 import { registerResearchTools, type ResearchServices } from "./research-tools.ts";
+import { WebtasksStatus } from "./status.ts";
 
 /** Optional explicit store directory. */
 const WEBTASKS_DIR_ENV = "WEBTASKS_DIR";
@@ -44,6 +45,8 @@ type Runtime = {
   recall: RecallService;
   task: TaskService;
   answer: AnswerService;
+  /** Footer status (TUI only): web, answer, and research counts with estimated spend. */
+  status?: WebtasksStatus;
   released: boolean;
   draining: boolean;
   /** An alert arrived while a drain was running; drain again before going idle. */
@@ -62,13 +65,14 @@ export default function piWebtasks(pi: ExtensionAPI) {
     // Mark the runtime unusable first: nothing may write to a store that is closing.
     outgoing.released = true;
     if (rt === outgoing) rt = undefined;
+    outgoing.status?.close();
     await outgoing.task.stop().catch(() => undefined);
     await outgoing.store.close().catch(() => undefined);
   }
 
   function currentServices(): ResearchServices {
     if (!rt || rt.released) throw new Error("Research tools are unavailable: the session is not started");
-    return { research: rt.research, recall: rt.recall, task: rt.task, answer: rt.answer };
+    return { research: rt.research, recall: rt.recall, task: rt.task, answer: rt.answer, status: rt.status };
   }
 
   /**
@@ -162,6 +166,8 @@ export default function piWebtasks(pi: ExtensionAPI) {
         sessionId,
         client,
         onAlerts: () => {
+          // Progress and completion change what the footer shows: runs in progress, sources, spend.
+          void runtime.status?.refresh();
           void drainAlerts(ctx).catch(err => {
             if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: alert delivery failed: ${formatError(err)}`, "warning");
           });
@@ -176,11 +182,15 @@ export default function piWebtasks(pi: ExtensionAPI) {
       redrain: false,
     };
     rt = runtime;
+    if (ctx.hasUI && ctx.mode === "tui") {
+      runtime.status = new WebtasksStatus(text => ctx.ui.setStatus("webtasks", text), () => store.runSummaries(sessionId));
+      void runtime.status.refresh();
+    }
     runtime.task.start();
     // A new runtime owns delivery: offer anything left unacknowledged right away.
     void drainAlerts(ctx).catch(() => undefined);
     // Reconcile in the background: a settled run must not delay session start.
-    void runtime.task.reconcile().catch(err => {
+    void runtime.task.reconcile().then(() => runtime.status?.refresh()).catch(err => {
       if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: research reconciliation failed: ${formatError(err)}`, "warning");
     });
   });

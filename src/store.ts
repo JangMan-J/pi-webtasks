@@ -1302,6 +1302,26 @@ export class ResearchStore {
 
   // ------------------------------------------------------------------ misc
 
+  /**
+   * One row per run of this session, with the number of sources it stored. Feeds
+   * the footer status, so its counts survive a reload of the extension.
+   */
+  async runSummaries(sessionId: string): Promise<{ kind: RunKind; state: RunState; processor?: string; intent: unknown; sources: number }[]> {
+    await this.connect();
+    const rows = this.stmt(
+      `SELECT r.kind, r.state, r.processor, r.intent,
+              (SELECT COUNT(*) FROM evidence e WHERE e.reference = r.reference AND e.kind IN ('source','excerpt')) AS sources
+       FROM runs r WHERE r.session_id = ?`,
+    ).all(sessionId) as { kind: RunKind; state: RunState; processor: string | null; intent: string; sources: number }[];
+    return rows.map(row => ({
+      kind: row.kind,
+      state: row.state,
+      processor: nullable(row.processor),
+      intent: JSON.parse(row.intent),
+      sources: Number(row.sources),
+    }));
+  }
+
   async stats(sessionId: string): Promise<StoreStats> {
     await this.connect();
     const evidence = this.stmt(`SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(body)), 0) AS chars FROM evidence WHERE session_id = ?`).get(sessionId) as

@@ -16,12 +16,15 @@ import type { RecallService } from "./recall.ts";
 import { EVIDENCE_KIND_NAMES, type EvidenceKind } from "./store.ts";
 import { TASK_CEILING, TASK_PROCESSORS, type TaskService } from "./task-service.ts";
 import { ANSWER_EFFORTS, DEFAULT_ANSWER_EFFORT, type AnswerService } from "./answer-service.ts";
+import type { StatusLane, WebtasksStatus } from "./status.ts";
 
 export type ResearchServices = {
   research: ResearchService;
   recall: RecallService;
   task: TaskService;
   answer: AnswerService;
+  /** Footer status; absent outside the TUI. */
+  status?: WebtasksStatus;
 };
 
 const EVIDENCE_KINDS = StringEnum(
@@ -62,6 +65,16 @@ function domainFilters(preferIn: string) {
     })),
     exclude_domains: Type.Optional(Type.Array(Type.String(), { minItems: 1, maxItems: 200, description: "Bare domains to leave out." })),
   };
+}
+
+/** Run one tool call with its footer lane marked busy; the lane ends however the call ends. */
+async function tracked<T>(status: WebtasksStatus | undefined, lane: StatusLane, work: () => Promise<T>): Promise<T> {
+  const end = status?.begin(lane);
+  try {
+    return await work();
+  } finally {
+    end?.();
+  }
 }
 
 function reply(out: { text: string; details: Record<string, unknown> }) {
@@ -114,8 +127,8 @@ export function registerResearchTools(pi: ExtensionAPI, services: () => Research
     }, { additionalProperties: false }),
     async execute(id, params, signal) {
       closed("web_search", ["objective", "search_queries", "mode", "max_results", "include_domains", "exclude_domains", "after_date", "context"], params);
-      const { research } = services();
-      return reply(await research.search(params, { invocationId: id, signal }));
+      const { research, status } = services();
+      return reply(await tracked(status, "web", () => research.search(params, { invocationId: id, signal })));
     },
   });
 
@@ -137,8 +150,8 @@ export function registerResearchTools(pi: ExtensionAPI, services: () => Research
     }, { additionalProperties: false }),
     async execute(id, params, signal) {
       closed("web_fetch", ["urls", "objective", "search_queries", "full_content", "max_age_seconds", "context"], params);
-      const { research } = services();
-      return reply(await research.fetch(params, { invocationId: id, signal }));
+      const { research, status } = services();
+      return reply(await tracked(status, "web", () => research.fetch(params, { invocationId: id, signal })));
     },
   });
 
@@ -171,12 +184,12 @@ export function registerResearchTools(pi: ExtensionAPI, services: () => Research
     }, { additionalProperties: false }),
     async execute(id, params, signal) {
       closed("web_research", ["input", "processor", "output_schema", "output_description", "include_domains", "exclude_domains", "after_date", "continue_from"], params);
-      const { task } = services();
-      return reply(await task.submit({
+      const { task, status } = services();
+      return reply(await tracked(status, "research", () => task.submit({
         ...params,
         input: params.input as string | Record<string, unknown>,
         output_schema: params.output_schema as Record<string, unknown> | undefined,
-      }, { invocationId: id, signal }));
+      }, { invocationId: id, signal })));
     },
   });
 
@@ -198,8 +211,8 @@ export function registerResearchTools(pi: ExtensionAPI, services: () => Research
     }, { additionalProperties: false }),
     async execute(id, params, signal) {
       closed("web_answer", ["question", "effort", "instructions", "include_domains", "exclude_domains", "continue_from"], params);
-      const { answer } = services();
-      return reply(await answer.answer(params, { invocationId: id, signal }));
+      const { answer, status } = services();
+      return reply(await tracked(status, "answer", () => answer.answer(params, { invocationId: id, signal })));
     },
   });
 

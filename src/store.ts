@@ -360,6 +360,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS alerts_dedup ON alerts(session_id, dedup_key);
 CREATE INDEX IF NOT EXISTS alerts_open ON alerts(session_id, state, created_at);
 `;
 
+/**
+ * Switch to WAL. The switch needs an exclusive lock, and SQLite may refuse it
+ * with SQLITE_BUSY without consulting the busy handler, so concurrent first
+ * opens retry here. WAL persists in the file: only a brand-new store ever waits.
+ */
+async function enableWal(db: DatabaseSync): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  for (let delay = 5; ; delay = Math.min(delay * 2, 200)) {
+    try {
+      db.exec("PRAGMA journal_mode = WAL");
+      return;
+    } catch (err) {
+      if (!/locked|busy/i.test((err as Error).message) || Date.now() + delay > deadline) throw err;
+      await new Promise(resolveWait => setTimeout(resolveWait, delay));
+    }
+  }
+}
+
 function isLowSurrogate(code: number): boolean {
   return code >= 0xdc00 && code <= 0xdfff;
 }
@@ -454,9 +472,9 @@ export class ResearchStore {
         await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
         const db = new DatabaseSync(this.path);
         try {
-          // First, so every later statement (including the WAL switch) waits for a concurrent opener.
+          // First, so every later statement waits for a concurrent opener.
           db.exec("PRAGMA busy_timeout = 5000");
-          db.exec("PRAGMA journal_mode = WAL");
+          await enableWal(db);
           db.exec("PRAGMA synchronous = FULL"); // a committed row is on disk before we report it
           db.exec("PRAGMA foreign_keys = ON");
           const version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);

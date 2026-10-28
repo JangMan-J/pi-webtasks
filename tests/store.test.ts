@@ -592,12 +592,13 @@ test("two processes racing the same tool invocation create exactly one run", asy
     const collected: string[] = [];
     let remaining = 2;
     for (let i = 0; i < 2; i++) {
-      execFile(process.execPath, ["--experimental-strip-types", "-e", child], (_err, stdout) => {
-        collected.push(stdout.trim());
+      execFile(process.execPath, ["--experimental-strip-types", "-e", child], (err, stdout, stderr) => {
+        collected.push(stdout.trim() || `child failed (${err?.code ?? "no output"}): ${stderr.trim()}`);
         if (--remaining === 0) done(collected);
       });
     }
   });
+  for (const line of outputs) assert.ok(line.startsWith("{"), line);
   const results = outputs.map(line => JSON.parse(line) as { reference: string; created: boolean });
   assert.equal(results.filter(result => result.created).length, 1, `exactly one racer may create the run; got ${JSON.stringify(results)}`);
   assert.equal(new Set(results.map(result => result.reference)).size, 1, "both racers converge on the same reference");

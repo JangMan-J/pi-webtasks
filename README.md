@@ -14,10 +14,10 @@ pi install npm:@jangmanj/pi-webtasks
 
 Then run `/login` in Pi and choose **Parallel** (see [Credentials](#credentials)).
 
-Up to 0.1.4 this package was published unscoped as `pi-webtasks`. Releases from
-0.2.0 on are published only as `@jangmanj/pi-webtasks`. To move, run
-`pi remove npm:pi-webtasks`, then install the scoped name. The research store
-directory is the same, so stored evidence carries over.
+This package was earlier published unscoped as `pi-webtasks`; that name is no
+longer published. If you installed it, run `pi remove npm:pi-webtasks`, then
+install the scoped name. The research store directory is the same, so stored
+evidence carries over.
 
 ## Status
 

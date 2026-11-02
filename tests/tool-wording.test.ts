@@ -42,3 +42,11 @@ test("the search mode description marks exactly the configured default", async (
   assert.equal(description.match(/\(the default\)/g)?.length, 1);
   assert.match(description, /basic \(~1 s\) for extended excerpts per result \(the default\)/);
 });
+
+test("promptGuidelines stay concise routing/scheduling rules instead of duplicating parameter schemas", async () => {
+  const { tools } = await loadTools();
+  const guidelines = [...tools.values()].flatMap(tool => tool.promptGuidelines ?? []);
+  assert.equal(guidelines.length, 2, "only cross-tool routing and background scheduling belong in <rules>");
+  const totalChars = guidelines.join("\n").length;
+  assert.ok(totalChars <= 800, `expected <= 800 guideline chars in <rules>, got ${totalChars}`);
+});

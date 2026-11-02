@@ -27,7 +27,7 @@ const prompt = buildSystemPromptSections({
   cwd: "/workspace",
   selectedTools: [...host.tools.keys()],
   toolSnippets: Object.fromEntries(definitions.map(t => [t.name, t.promptSnippet])),
-  toolGuidelines: Object.fromEntries(definitions.map(t => [t.name, t.promptGuidelines])),
+  toolGuidelines: Object.fromEntries(definitions.map(t => [t.name, t.promptGuidelines ?? []])),
 });
 const totals = {
   tools: entries.length,

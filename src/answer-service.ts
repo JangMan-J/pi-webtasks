@@ -216,7 +216,7 @@ export function createAnswerService({ store, sessionId, client }: Options) {
         preview.text,
         "",
         `Citations: ${citations.length} source link(s). Full answer: ${reference}.`,
-        `Ask a follow-up with web_answer { question, continue_from: "${reference}" }.`,
+        `Ask a follow-up with web_answer { question, continue_from: "${reference}" }, or list cited sources with web_recall { reference: "${reference}" }.`,
         report ? `Read the stored answer with web_recall { handle: "${report}" }.` : undefined,
         UNTRUSTED,
       ].filter((line): line is string => line !== undefined).join("\n"),

@@ -1,5 +1,5 @@
 /**
- * Footer status for the web tools, shown through `ctx.ui.setStatus("webtasks", ...)`.
+ * Footer status for the web tools, shown through `ctx.ui.setStatus("web-tasks", ...)`.
  * Footer extensions (zentui, starship, powerline) render extension statuses, so this is
  * the whole integration. It is for the user, never the agent.
  *

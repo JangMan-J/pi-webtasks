@@ -61,7 +61,7 @@ test("a web_search call updates the webtasks footer status through Pi's loader",
     : json({}));
   await h.start();
   await h.call("web_search", { objective: "What does alpha say about beta?", search_queries: ["alpha beta"] });
-  const ours = () => h.statusWrites.filter((w: { key: string }) => w.key === "webtasks");
+  const ours = () => h.statusWrites.filter((w: { key: string }) => w.key === "web-tasks");
   for (let i = 0; i < 50 && !plain(ours().at(-1)?.text).startsWith(`${ICON.web} 2`); i++) await new Promise(r => setTimeout(r, 10));
   assert.ok(ours().some((w: { text?: string }) => /⠋/.test(plain(w.text))), "the web lane spun during the call");
   assert.equal(plain(ours().at(-1)?.text), `${ICON.web} 2  ${ICON.answer} 0  ${ICON.research} 0  ${ICON.spend} 0.01`);

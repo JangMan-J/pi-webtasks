@@ -153,7 +153,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
     };
     rt = runtime;
     if (ctx.hasUI && ctx.mode === "tui") {
-      runtime.status = new WebtasksStatus(text => ctx.ui.setStatus("webtasks", text), () => store.runSummaries(sessionId));
+      runtime.status = new WebtasksStatus(text => ctx.ui.setStatus("web-tasks", text), () => store.runSummaries(sessionId));
       void runtime.status.refresh();
     }
     runtime.task.start();

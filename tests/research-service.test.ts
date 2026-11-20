@@ -256,9 +256,14 @@ test("recall searches, pages, filters by kind, and reads bounded slices", async 
   await assert.rejects(() => h.recall.recall({ handle, query: "fact" }), /not both/);
   await assert.rejects(() => h.recall.recall({}), /Pass handle to read/);
   await assert.rejects(() => h.recall.recall({ query: "fact", offset: 2 }), /offset applies only/);
-  await assert.rejects(() => h.recallOther.recall({ handle }), /No evidence/);
-  const foreignReference = await h.recallOther.recall({ reference: String(page.details.handles[0]) });
-  assert.match(foreignReference.text, /No stored evidence matches/);
+  const crossHandle = await h.recallOther.recall({ handle });
+  assert.match(crossHandle.text, new RegExp(handle));
+  const foreignSearch = await h.service.search({ search_queries: ["alpha"] }, { invocationId: "call-2" });
+  const crossRef = await h.recallOther.recall({ reference: String(foreignSearch.details.reference) });
+  assert.equal(crossRef.details.hits, 2);
+  await assert.rejects(() => h.recallOther.recall({ handle: "ev_0000000000000000" }), /No evidence/);
+  const missingReference = await h.recallOther.recall({ reference: String(page.details.handles[0]) });
+  assert.match(missingReference.text, /No stored evidence matches/);
 });
 
 test("recall cannot see another session's evidence", async t => {
@@ -267,4 +272,104 @@ test("recall cannot see another session's evidence", async t => {
   const other = await h.recallOther.recall({ query: "alpha" });
   assert.match(other.text, /No stored evidence matches/);
   assert.equal(other.details.hits, 0);
+});
+
+test("recall supports cross-session time-range queries, listing, pagination, and validation", async t => {
+  const dir = await mkdtemp(resolve(tmpdir(), "research-time-"));
+  let now = Date.UTC(2026, 2, 10, 12, 0, 0); // 2026-03-10T12:00:00Z
+  const store = new ResearchStore(dir, { now: () => now });
+  await store.init();
+  t.after(async () => { await store.close(); await rm(dir, { recursive: true, force: true }); });
+
+  const recallS1 = createRecallService({ store, sessionId: "s1", alerts: createAlertDelivery({ store, sessionId: "s1", deliver: () => undefined }) });
+  const recallS2 = createRecallService({ store, sessionId: "s2", alerts: createAlertDelivery({ store, sessionId: "s2", deliver: () => undefined }) });
+
+  const seed = async (sessionId: string, intentKey: string, at: number, title: string, body: string) => {
+    now = at;
+    const { reference } = await store.beginRun({ sessionId, intentKey, intent: { title }, kind: "search" });
+    const completed = await store.completeRun({
+      sessionId,
+      reference,
+      state: "completed",
+      evidence: [{ kind: "excerpt", origin: "provider_source", title, body }],
+    });
+    return { reference, handle: completed.evidence[0]!.handle };
+  };
+
+  // Seed evidence across s1 and s2 at various ages relative to 2026-03-10T12:00:00Z
+  const t35d = Date.UTC(2026, 1, 3, 12, 0, 0);  // 35 days ago
+  const t10d = Date.UTC(2026, 1, 28, 12, 0, 0); // 10 days ago
+  const t3d = Date.UTC(2026, 2, 7, 12, 0, 0);   // 3 days ago
+  const t12h = Date.UTC(2026, 2, 10, 0, 0, 0);  // 12 hours ago
+  const t30m = Date.UTC(2026, 2, 10, 11, 30, 0); // 30 minutes ago
+
+  const rOld = await seed("s1", "k-old", t35d, "Old s1", "sharedtopic from 35 days ago");
+  await seed("s2", "k-10d", t10d, "TenDays s2", "sharedtopic from 10 days ago");
+  await seed("s1", "k-3d", t3d, "ThreeDays s1", "sharedtopic from 3 days ago");
+  await seed("s2", "k-12h", t12h, "TwelveHours s2", "sharedtopic from 12 hours ago");
+  await seed("s2", "k-30m", t30m, "ThirtyMins s2", "sharedtopic from 30 minutes ago");
+
+  // Reset clock to anchor time
+  now = Date.UTC(2026, 2, 10, 12, 0, 0);
+
+  // store.run with crossSession
+  assert.equal(await store.run("s2", rOld.reference), undefined);
+  const crossRun = await store.run("s2", rOld.reference, { crossSession: true });
+  assert.equal(crossRun?.reference, rOld.reference);
+  assert.equal(crossRun?.session_id, "s1");
+
+  // within: "1h", "24h", "7d", "30d", "all", "session"
+  const w1h = await recallS1.recall({ within: "1h" });
+  assert.equal(w1h.details.hits, 1);
+  assert.match(w1h.text, /ThirtyMins s2/);
+
+  const w24h = await recallS1.recall({ within: "24h" });
+  assert.equal(w24h.details.hits, 2);
+  assert.match(w24h.text, /ThirtyMins s2[\s\S]*TwelveHours s2/);
+
+  const w7d = await recallS1.recall({ within: "7d" });
+  assert.equal(w7d.details.hits, 3);
+
+  const w30d = await recallS1.recall({ within: "30d" });
+  assert.equal(w30d.details.hits, 4);
+
+  const wAll = await recallS1.recall({ within: "all" });
+  assert.equal(wAll.details.hits, 5);
+  assert.match(wAll.text, /ThirtyMins s2[\s\S]*Old s1/);
+
+  const wSession = await recallS1.recall({ within: "session" });
+  assert.equal(wSession.details.hits, 2);
+  assert.match(wSession.text, /ThreeDays s1[\s\S]*Old s1/);
+  assert.doesNotMatch(wSession.text, /TwelveHours s2/);
+
+  // since / until with YYYY-MM-DD and ISO-8601
+  const byDate = await recallS1.recall({ since: "2026-02-28", until: "2026-03-07" });
+  assert.equal(byDate.details.hits, 2);
+  assert.match(byDate.text, /ThreeDays s1[\s\S]*TenDays s2/);
+
+  const byIso = await recallS2.recall({ since: "2026-03-10T00:00:00Z", until: "2026-03-10T11:45:00Z" });
+  assert.equal(byIso.details.hits, 2);
+
+  // within: "session" + since honors session scoping and time bound
+  const sessionSince = await recallS1.recall({ within: "session", since: "2026-03-01" });
+  assert.equal(sessionSince.details.hits, 1);
+  assert.match(sessionSince.text, /ThreeDays s1/);
+
+  // Cursor pagination preserves cross-session and time-range bounds
+  const page1 = await recallS1.recall({ query: "sharedtopic", within: "30d", limit: 2 });
+  assert.equal(page1.details.hits, 2);
+  assert.equal(page1.details.more, true);
+  const page2 = await recallS1.recall({ cursor: String(page1.details.cursor), limit: 2 });
+  assert.equal(page2.details.hits, 2);
+  assert.equal(page2.details.more, false);
+  const allHandles = [...(page1.details.handles as string[]), ...(page2.details.handles as string[])];
+  assert.equal(new Set(allHandles).size, 4);
+
+  // Validation errors
+  await assert.rejects(() => recallS1.recall({ within: "bogus" }), /Invalid within/);
+  await assert.rejects(() => recallS1.recall({ since: "2026-02-30" }), /Invalid since/);
+  await assert.rejects(() => recallS1.recall({ until: "not-a-date" }), /Invalid until/);
+  await assert.rejects(() => recallS1.recall({ within: "24h", since: "2026-03-01" }), /Pass either within or since, not both/);
+  await assert.rejects(() => recallS1.recall({ since: "2026-03-10", until: "2026-03-01" }), /since must not be later than until/);
+  await assert.rejects(() => recallS1.recall({ handle: rOld.handle, within: "24h" }), /not both/);
 });

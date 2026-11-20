@@ -117,7 +117,11 @@ test("evidence is invisible to another Pi session and visible again after a relo
   await other.start();
   const hidden = await other.call("web_recall", { query: "durable" });
   assert.match(hidden.text, /No stored evidence/);
-  await assert.rejects(() => other.call("web_recall", { handle }), /No evidence/, "a foreign handle behaves like a missing one");
+  const crossHandle = await other.call("web_recall", { handle });
+  assert.match(crossHandle.text, /Alpha paper/);
+  const crossRef = await other.call("web_recall", { reference: String(out.details.reference) });
+  assert.equal(crossRef.details.hits, 2);
+  await assert.rejects(() => other.call("web_recall", { handle: "ev_0000000000000000" }), /No evidence/, "a missing handle still rejects");
 
   const reloaded = await h.instance("session-a");
   await reloaded.start();

@@ -347,6 +347,7 @@ CREATE INDEX IF NOT EXISTS evidence_session ON evidence(session_id, id);
 CREATE INDEX IF NOT EXISTS evidence_run ON evidence(reference, id);
 CREATE INDEX IF NOT EXISTS evidence_kind ON evidence(session_id, kind, id);
 CREATE INDEX IF NOT EXISTS evidence_url ON evidence(session_id, url) WHERE url IS NOT NULL;
+CREATE INDEX IF NOT EXISTS evidence_created ON evidence(created_at, id);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS evidence_fts USING fts5(
   title,
@@ -430,7 +431,17 @@ function ftsQuery(text: string): string | undefined {
 }
 
 /** A page cursor carries the search it continues, so a cursor alone is enough to fetch the next page. */
-type CursorState = { v: 2; snapshot: number; offset: number; query?: string; reference?: string; kinds?: EvidenceKind[] };
+type CursorState = {
+  v: 2;
+  snapshot: number;
+  offset: number;
+  query?: string;
+  reference?: string;
+  kinds?: EvidenceKind[];
+  since?: number;
+  until?: number;
+  crossSession?: boolean;
+};
 
 function encodeCursor(state: CursorState): string {
   return Buffer.from(JSON.stringify(state), "utf8").toString("base64url");
@@ -448,7 +459,10 @@ function decodeCursor(cursor: string): CursorState {
     !value || value.v !== 2 || !Number.isSafeInteger(value.snapshot) || !Number.isSafeInteger(value.offset) || value.snapshot! < 0 || value.offset! < 0 ||
     (value.query !== undefined && typeof value.query !== "string") ||
     (value.reference !== undefined && typeof value.reference !== "string") ||
-    (value.kinds !== undefined && (!Array.isArray(value.kinds) || !value.kinds.every(kind => EVIDENCE_KINDS.has(kind))))
+    (value.kinds !== undefined && (!Array.isArray(value.kinds) || !value.kinds.every(kind => EVIDENCE_KINDS.has(kind)))) ||
+    (value.since !== undefined && (typeof value.since !== "number" || !Number.isFinite(value.since))) ||
+    (value.until !== undefined && (typeof value.until !== "number" || !Number.isFinite(value.until))) ||
+    (value.crossSession !== undefined && typeof value.crossSession !== "boolean")
   ) {
     throw new StoreError("invalid", "Malformed search cursor");
   }
@@ -855,9 +869,11 @@ export class ResearchStore {
     };
   }
 
-  async run(sessionId: string, reference: string): Promise<RunRecord | undefined> {
+  async run(sessionId: string, reference: string, options: { crossSession?: boolean } = {}): Promise<RunRecord | undefined> {
     await this.connect();
-    const row = this.stmt(`SELECT * FROM runs WHERE reference = ? AND session_id = ?`).get(reference, sessionId) as Record<string, unknown> | undefined;
+    const row = (options.crossSession
+      ? this.stmt(`SELECT * FROM runs WHERE reference = ?`).get(reference)
+      : this.stmt(`SELECT * FROM runs WHERE reference = ? AND session_id = ?`).get(reference, sessionId)) as Record<string, unknown> | undefined;
     return row ? this.toRun(row) : undefined;
   }
 
@@ -1147,25 +1163,48 @@ export class ResearchStore {
    * the first page cannot change that page sequence, so a cursor never repeats
    * or skips rows; a fresh search is the way to see new material.
    */
-  async search(sessionId: string, options: { query?: string; reference?: string; kinds?: EvidenceKind[]; limit?: number; cursor?: string } = {}): Promise<SearchPage> {
+  async search(
+    sessionId: string,
+    options: {
+      query?: string;
+      reference?: string;
+      kinds?: EvidenceKind[];
+      limit?: number;
+      cursor?: string;
+      since?: number;
+      until?: number;
+      crossSession?: boolean;
+    } = {},
+  ): Promise<SearchPage> {
     await this.connect();
     const limit = clamp(options.limit, 10, 1, 50);
     const cursor = options.cursor === undefined ? undefined : decodeCursor(options.cursor);
     // A cursor continues exactly the search that produced it; its filters win over anything passed beside it.
     const text = cursor ? cursor.query : options.query?.trim() || undefined;
     const reference = cursor ? cursor.reference : options.reference || undefined;
+    const since = cursor ? cursor.since : options.since;
+    const until = cursor ? cursor.until : options.until;
+    const crossSession = cursor ? Boolean(cursor.crossSession) : Boolean(options.crossSession);
     let kinds: EvidenceKind[] | undefined = cursor ? cursor.kinds : undefined;
     if (!cursor && options.kinds?.length) {
       kinds = options.kinds.filter(kind => EVIDENCE_KINDS.has(kind));
       if (!kinds.length) throw new StoreError("invalid", "No known evidence kinds requested");
     }
     const snapshot = cursor?.snapshot ?? Number(
-      (this.stmt(`SELECT COALESCE(MAX(id), 0) AS max FROM evidence WHERE session_id = ?`).get(sessionId) as { max: number }).max,
+      crossSession
+        ? (this.stmt(`SELECT COALESCE(MAX(id), 0) AS max FROM evidence`).get() as { max: number }).max
+        : (this.stmt(`SELECT COALESCE(MAX(id), 0) AS max FROM evidence WHERE session_id = ?`).get(sessionId) as { max: number }).max,
     );
     const offset = cursor?.offset ?? 0;
 
-    const filters: string[] = ["e.session_id = ?", "e.id <= ?"];
-    const params: (string | number)[] = [sessionId, snapshot];
+    const filters: string[] = [];
+    const params: (string | number)[] = [];
+    if (!crossSession) {
+      filters.push("e.session_id = ?");
+      params.push(sessionId);
+    }
+    filters.push("e.id <= ?");
+    params.push(snapshot);
     if (reference) {
       filters.push("e.reference = ?");
       params.push(reference);
@@ -1173,6 +1212,14 @@ export class ResearchStore {
     if (kinds?.length) {
       filters.push(`e.kind IN (${kinds.map(() => "?").join(",")})`);
       params.push(...kinds);
+    }
+    if (since !== undefined) {
+      filters.push("e.created_at >= ?");
+      params.push(since);
+    }
+    if (until !== undefined) {
+      filters.push("e.created_at <= ?");
+      params.push(until);
     }
 
     const query = text ? ftsQuery(text) : undefined;
@@ -1192,7 +1239,7 @@ export class ResearchStore {
         `SELECT e.id, e.handle, e.reference, e.kind, e.origin, e.title, e.url, e.pointer, LENGTH(e.body) AS chars, e.created_at,
                 '' AS snippet
          FROM evidence e WHERE ${filters.join(" AND ")}
-         ORDER BY e.id DESC LIMIT ? OFFSET ?`,
+         ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?`,
       ).all(...params, limit + 1, offset) as Record<string, unknown>[];
     }
 
@@ -1213,7 +1260,19 @@ export class ResearchStore {
       })),
       snapshot,
       more,
-      next_cursor: more ? encodeCursor({ v: 2, snapshot, offset: offset + limit, query: text, reference, kinds }) : undefined,
+      next_cursor: more
+        ? encodeCursor({
+            v: 2,
+            snapshot,
+            offset: offset + limit,
+            query: text,
+            reference,
+            kinds,
+            since,
+            until,
+            crossSession: crossSession || undefined,
+          })
+        : undefined,
     };
   }
 
@@ -1223,13 +1282,22 @@ export class ResearchStore {
    * Offsets and lengths are UTF-16 code units, matching JavaScript string
    * indexing; a slice never splits a surrogate pair.
    */
-  async readEvidence(sessionId: string, handle: string, options: { offset?: number; limit?: number } = {}): Promise<EvidenceSlice> {
+  async readEvidence(
+    sessionId: string,
+    handle: string,
+    options: { offset?: number; limit?: number; crossSession?: boolean } = {},
+  ): Promise<EvidenceSlice> {
     await this.connect();
-    const row = this.stmt(
-      `SELECT handle, reference, kind, origin, title, url, pointer, body, created_at
-       FROM evidence WHERE handle = ? AND session_id = ?`,
-    ).get(handle, sessionId) as Record<string, unknown> | undefined;
-    if (!row) throw new StoreError("not_found", `No evidence ${handle} in this session`);
+    const row = (options.crossSession
+      ? this.stmt(
+        `SELECT handle, reference, kind, origin, title, url, pointer, body, created_at
+         FROM evidence WHERE handle = ?`,
+      ).get(handle)
+      : this.stmt(
+        `SELECT handle, reference, kind, origin, title, url, pointer, body, created_at
+         FROM evidence WHERE handle = ? AND session_id = ?`,
+      ).get(handle, sessionId)) as Record<string, unknown> | undefined;
+    if (!row) throw new StoreError("not_found", options.crossSession ? `No evidence ${handle}` : `No evidence ${handle} in this session`);
 
     const body = row.body as string;
     const total = body.length;

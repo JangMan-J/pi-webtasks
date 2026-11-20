@@ -21,7 +21,7 @@
 
 import type { Parallel } from "parallel-web";
 import type { RunInput, TaskRun, TaskRunEventsResponse, TaskRunResult, TaskSpec } from "parallel-web/resources";
-import { OPEN_RUN_STATES, TERMINAL_RUN_STATES, UNCONFIRMED_RUN_STATES, type ResearchStore } from "./store.ts";
+import { OPEN_RUN_STATES, TERMINAL_RUN_STATES, UNCONFIRMED_RUN_STATES, type ResearchStore, type RunRecord } from "./store.ts";
 import { providerSourcePolicy, sourcePolicy } from "./source-policy.ts";
 import { createPaidCalls } from "./paid-call.ts";
 import {
@@ -69,6 +69,10 @@ type TaskIntent = {
   output_description?: string;
   source_policy?: { include_domains?: string[]; exclude_domains?: string[]; after_date?: string };
   continue_from?: string;
+};
+
+type CrossSessionRunLookup = {
+  run(sessionId: string, reference: string, options?: { crossSession?: boolean }): Promise<RunRecord | undefined>;
 };
 
 type Options = {
@@ -129,8 +133,8 @@ export function createTaskService(options: Options) {
   }
 
   async function continuationId(reference: string): Promise<string> {
-    const run = await store.run(sessionId, reference);
-    if (!run) throw new Error(`${reference} is not a research record in this session`);
+    const run = await (store as ResearchStore & CrossSessionRunLookup).run(sessionId, reference, { crossSession: true });
+    if (!run) throw new Error(`${reference} is not a research record`);
     const id = run.provider_interaction_id ?? (run.kind === "answer" ? run.provider_run_id : undefined);
     if (!id) throw new Error(`${reference} cannot be continued yet (state: ${run.state}); continue from a completed web_research run or web_answer`);
     return id;

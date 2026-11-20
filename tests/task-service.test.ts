@@ -335,6 +335,62 @@ test("an earlier run provides the interaction id for a continuation", async t =>
   await assert.rejects(() => h.service.submit({ input: "x", continue_from: "run_0000000000000000" }, { invocationId: "call-3" }), /not a research record/);
 });
 
+test("continue_from resolves earlier task and answer runs across sessions", async t => {
+  const h = await harness(t);
+  await h.store.registerSession("s0");
+
+  const s0Task = await h.store.beginRun({ sessionId: "s0", intentKey: "s0-task", intent: { input: "prior task" }, kind: "task", state: "submitting" });
+  await h.store.bindProviderRun({ sessionId: "s0", reference: s0Task.reference, providerRunId: "trun_s0", interactionId: "int_s0_task" });
+
+  const s0Answer = await h.store.beginRun({ sessionId: "s0", intentKey: "s0-answer", intent: { input: "prior answer" }, kind: "answer", state: "submitting" });
+  await h.store.bindProviderRun({ sessionId: "s0", reference: s0Answer.reference, providerRunId: "ans_s0_run" });
+
+  const s0Pending = await h.store.beginRun({ sessionId: "s0", intentKey: "s0-pending", intent: { input: "unfinished" }, kind: "task", state: "submitting" });
+
+  const view = Object.create(h.store) as ResearchStore;
+  const lookups: { sessionId: string; reference: string; options?: { crossSession?: boolean } }[] = [];
+  (view as unknown as { run: (sid: string, ref: string, opts?: { crossSession?: boolean }) => Promise<unknown> }).run = async (sid, ref, opts) => {
+    lookups.push({ sessionId: sid, reference: ref, options: opts });
+    return (await (h.store.run as (s: string, r: string, o?: { crossSession?: boolean }) => Promise<unknown>)(sid, ref, opts))
+      ?? (opts?.crossSession ? await h.store.run("s0", ref) : undefined);
+  };
+
+  const { client, calls } = fakeClient();
+  const service = createTaskService({
+    store: view,
+    sessionId: "s1",
+    client: async () => client as never,
+    onAlerts: () => undefined,
+    log: () => undefined,
+    sweepMs: 3_600_000,
+    retryMs: 5,
+  });
+  t.after(() => service.stop());
+
+  await service.submit({ input: "follow-up task", output_description: "y", continue_from: s0Task.reference }, { invocationId: "call-1" });
+  await service.submit({ input: "follow-up answer", output_description: "z", continue_from: s0Answer.reference }, { invocationId: "call-2" });
+
+  assert.equal(calls.adds.length, 2);
+  const firstInput = (calls.adds[0]!.params as { inputs: Record<string, unknown>[] }).inputs[0]!;
+  const secondInput = (calls.adds[1]!.params as { inputs: Record<string, unknown>[] }).inputs[0]!;
+  assert.equal(firstInput.previous_interaction_id, "int_s0_task");
+  assert.equal(secondInput.previous_interaction_id, "ans_s0_run");
+
+  await assert.rejects(
+    () => service.submit({ input: "follow-up pending", output_description: "w", continue_from: s0Pending.reference }, { invocationId: "call-3" }),
+    /cannot be continued yet/,
+  );
+
+  assert.deepEqual(
+    lookups.filter(l => [s0Task.reference, s0Answer.reference, s0Pending.reference].includes(l.reference)),
+    [
+      { sessionId: "s1", reference: s0Task.reference, options: { crossSession: true } },
+      { sessionId: "s1", reference: s0Answer.reference, options: { crossSession: true } },
+      { sessionId: "s1", reference: s0Pending.reference, options: { crossSession: true } },
+    ],
+  );
+});
+
 test("an unbound submission is recovered from the group instead of resubmitted", async t => {
   const h = await harness(t, {
     groupRuns: () => [{ type: "task_run.state", run: { run_id: "trun_found", status: "running", interaction_id: "int_found", metadata: { webtasks_ref: "run_unbound_placeholder" } } }],

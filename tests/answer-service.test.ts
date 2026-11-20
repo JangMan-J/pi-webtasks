@@ -90,6 +90,46 @@ test("a follow-up continues the provider conversation through the local referenc
   assert.equal(h.calls.length, 2, "an invalid continuation never reaches the provider");
 });
 
+test("continue_from resolves an earlier answer run across sessions", async t => {
+  const h = await harness(t);
+  await h.store.registerSession("s0");
+  const prior = await h.store.beginRun({ sessionId: "s0", intentKey: "call-s0", intent: {}, kind: "answer", state: "accepted" });
+  await h.store.completeRun({
+    sessionId: "s0",
+    reference: prior.reference,
+    state: "completed",
+    providerRunId: "resp_s0",
+    rawResult: { id: "resp_s0" },
+  });
+  const foreignTask = await h.store.beginRun({ sessionId: "s0", intentKey: "call-s0-task", intent: {}, kind: "task", state: "accepted" });
+
+  const view = Object.create(h.store) as ResearchStore;
+  const lookups: { sessionId: string; reference: string; options?: { crossSession?: boolean } }[] = [];
+  (view as unknown as { run: (sid: string, ref: string, opts?: { crossSession?: boolean }) => Promise<unknown> }).run = async (sid, ref, opts) => {
+    lookups.push({ sessionId: sid, reference: ref, options: opts });
+    return (await (h.store.run as (s: string, r: string, o?: { crossSession?: boolean }) => Promise<unknown>)(sid, ref, opts))
+      ?? (opts?.crossSession ? await h.store.run("s0", ref) : undefined);
+  };
+
+  const { client, calls } = fakeClient();
+  const s1 = createAnswerService({ store: view, sessionId: "s1", client: async () => client });
+  const result = await s1.answer({ question: "follow-up?", continue_from: prior.reference }, { invocationId: "call-s1" });
+
+  assert.equal(lookups[0]?.options?.crossSession, true);
+  assert.equal(calls[0]!.body.previous_response_id, "resp_s0");
+  assert.equal(result.details.continued, true);
+
+  await assert.rejects(
+    () => s1.answer({ question: "x", continue_from: foreignTask.reference }, { invocationId: "call-s1-task" }),
+    /is not an earlier web_answer/,
+  );
+  await assert.rejects(
+    () => s1.answer({ question: "x", continue_from: "run_missing" }, { invocationId: "call-s1-missing" }),
+    /is not a research record/,
+  );
+  assert.equal(calls.length, 1);
+});
+
 test("a replayed invocation returns the stored answer instead of asking again", async t => {
   const h = await harness(t);
   const first = await h.service.answer({ question: "once?" }, { invocationId: "call-1" });

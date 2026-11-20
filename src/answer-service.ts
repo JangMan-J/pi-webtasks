@@ -8,7 +8,7 @@
  * outcome is recorded as `uncertain` rather than repeated.
  */
 
-import type { ResearchStore, EvidenceInput, CitationInput } from "./store.ts";
+import type { ResearchStore, RunRecord, EvidenceInput, CitationInput } from "./store.ts";
 import { createPaidCalls, UnusableResponse } from "./paid-call.ts";
 import { sourcePolicy } from "./source-policy.ts";
 import { clean, oneLine, RECEIPT_LIMIT, replayReceipt, UNTRUSTED } from "./receipt.ts";
@@ -45,6 +45,10 @@ type Options = {
   store: ResearchStore;
   sessionId: string;
   client: () => Promise<AnswerClient>;
+};
+
+type CrossSessionRunLookup = {
+  run(sessionId: string, reference: string, options?: { crossSession?: boolean }): Promise<RunRecord | undefined>;
 };
 
 type Annotation = { type?: string; url?: string; title?: string; start_index?: number; end_index?: number };
@@ -137,8 +141,8 @@ export function createAnswerService({ store, sessionId, client }: Options) {
   const calls = createPaidCalls({ store, sessionId, client });
 
   async function continuationId(reference: string): Promise<string> {
-    const run = await store.run(sessionId, reference);
-    if (!run) throw new Error(`${reference} is not a research record in this session`);
+    const run = await (store as ResearchStore & CrossSessionRunLookup).run(sessionId, reference, { crossSession: true });
+    if (!run) throw new Error(`${reference} is not a research record`);
     if (run.kind !== "answer") throw new Error(`${reference} is not an earlier web_answer; continue a web_research run with web_research { continue_from }`);
     if (!run.provider_run_id) throw new Error(`${reference} has no completed answer to continue from (state: ${run.state})`);
     return run.provider_run_id;

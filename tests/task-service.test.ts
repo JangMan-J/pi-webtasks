@@ -74,9 +74,15 @@ async function harness(t: import("node:test").TestContext, config: Parameters<ty
     sweepMs: 3_600_000,
     retryMs: 5,
   });
-  t.after(async () => { await service.stop(); await store.close(); await rm(dir, { recursive: true, force: true }); });
+  const stops = [() => service.stop()];
+  t.after(async () => {
+    for (const stop of stops) await stop();
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
   return {
     store, service, calls, dir,
+    own: <S extends { stop(): Promise<void> }>(extra: S): S => { stops.push(() => extra.stop()); return extra; },
     advance: (ms: number) => { clock += ms; },
     now: () => clock,
     alerts: () => alerts,
@@ -177,7 +183,7 @@ test("an accepted run that cannot be recorded is uncertain, whatever the recordi
   // A recording failure that happens to carry a 4xx status must not read as a rejection.
   const failing = Object.create(h.store) as ResearchStore;
   failing.bindProviderRun = async () => { throw Object.assign(new Error("constraint failed"), { status: 409 }); };
-  const service = createTaskService({
+  const service = h.own(createTaskService({
     store: failing, sessionId: "s1", log: () => undefined, onAlerts: () => undefined, retryMs: 5,
     client: async () => ({
       taskGroup: {
@@ -185,8 +191,7 @@ test("an accepted run that cannot be recorded is uncertain, whatever the recordi
         addRuns: async () => ({ run_ids: ["trun_1"] }),
       },
     }) as never,
-  });
-  t.after(() => service.stop());
+  }));
   await assert.rejects(
     () => service.submit({ input: "goal", output_description: "findings" }, { invocationId: "call-1" }),
     (err: Error) => /recording it failed: constraint failed\. It may have started anyway/.test(err.message) && !/trun_1/.test(err.message),
@@ -356,7 +361,7 @@ test("continue_from resolves earlier task and answer runs across sessions", asyn
   };
 
   const { client, calls } = fakeClient();
-  const service = createTaskService({
+  const service = h.own(createTaskService({
     store: view,
     sessionId: "s1",
     client: async () => client as never,
@@ -364,8 +369,7 @@ test("continue_from resolves earlier task and answer runs across sessions", asyn
     log: () => undefined,
     sweepMs: 3_600_000,
     retryMs: 5,
-  });
-  t.after(() => service.stop());
+  }));
 
   await service.submit({ input: "follow-up task", output_description: "y", continue_from: s0Task.reference }, { invocationId: "call-1" });
   await service.submit({ input: "follow-up answer", output_description: "z", continue_from: s0Answer.reference }, { invocationId: "call-2" });
@@ -399,7 +403,7 @@ test("an unbound submission is recovered from the group instead of resubmitted",
   await h.store.bindGroup("s1", "tg_1", "ready");
   const begun = await h.store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: { input: "x" }, kind: "task", state: "submitting" });
   // The fake group reports the reference the store actually allocated.
-  const fixed = createTaskService({
+  const fixed = h.own(createTaskService({
     store: h.store, sessionId: "s1",
     client: async () => ({
       taskGroup: {
@@ -415,8 +419,7 @@ test("an unbound submission is recovered from the group instead of resubmitted",
     }) as never,
     onAlerts: () => undefined,
     log: () => undefined,
-  });
-  t.after(() => fixed.stop());
+  }));
   await fixed.reconcile();
   const recovered = await h.store.run("s1", begun.reference);
   assert.equal(recovered?.provider_run_id, "trun_found", "the provider id was recovered, not bought again");

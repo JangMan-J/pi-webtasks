@@ -64,8 +64,16 @@ async function harness(t: import("node:test").TestContext, reply?: (options: { s
   await store.registerSession("s1");
   const { client, calls } = fakeClient(reply);
   const service = createAnswerService({ store, sessionId: "s1", client: async () => client, log: () => undefined, ...extra });
-  t.after(async () => { await service.stop(); await store.close(); await rm(dir, { recursive: true, force: true }); });
-  return { store, service, calls };
+  const stops = [() => service.stop()];
+  t.after(async () => {
+    for (const stop of stops) await stop();
+    await store.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  return {
+    store, service, calls,
+    own: <S extends { stop(): Promise<void> }>(s: S): S => { stops.push(() => s.stop()); return s; },
+  };
 }
 
 async function until(check: () => Promise<boolean> | boolean, ms = 3000): Promise<void> {
@@ -189,8 +197,7 @@ test("continue_from resolves an earlier answer run across sessions", async t => 
 
   const g = gate();
   const { client, calls } = fakeClient(({ signal }) => sseGated(g, signal));
-  const s1 = createAnswerService({ store: view, sessionId: "s1", client: async () => client, log: () => undefined });
-  t.after(() => s1.stop());
+  const s1 = h.own(createAnswerService({ store: view, sessionId: "s1", client: async () => client, log: () => undefined }));
   const result = await s1.answer({ question: "follow-up?", continue_from: prior.reference }, { invocationId: "call-s1" });
   assert.equal(lookups[0]?.options?.crossSession, true);
   assert.equal(result.details.continued, true);

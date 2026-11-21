@@ -25,6 +25,18 @@ test("totals count sources per lane and price completed runs at list prices", ()
   assert.equal(statusTotals([{ kind: "answer", state: "uncertain", intent: { effort: "high" }, sources: 0 }]).unpriced, true, "an unknown outcome may have been billed");
 });
 
+test("totals count and price completed check runs", () => {
+  const totals = statusTotals([
+    { kind: "check", state: "completed", intent: {}, sources: 3 },
+    { kind: "check", state: "completed", intent: {}, sources: 2 },
+    { kind: "check", state: "failed", intent: {}, sources: 4 },
+    { kind: "check", state: "uncertain", intent: {}, sources: 6 },
+  ]);
+  assert.equal(totals.counts.web, 5);
+  assert.equal(totals.microdollars, 2_000);
+  assert.equal(totals.unpriced, true);
+});
+
 test("spend fits in a few characters", () => {
   assert.equal(formatSpend(0), "0");
   assert.equal(formatSpend(161_000), "0.16");

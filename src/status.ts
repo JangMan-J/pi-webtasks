@@ -5,7 +5,7 @@
  *
  * Four lanes, each a Nerd Font icon and a count; a spinner frame follows a lane while it
  * works:
- *   web sources (web_search, web_fetch) · answers (web_answer) ·
+ *   web sources (web_search, web_fetch, web_check) · answers (web_answer) ·
  *   research sources (web_research, spinning while a run is in progress) ·
  *   estimated spend at published list prices.
  *
@@ -29,6 +29,7 @@ const color = (code: number, text: string) => `\x1b[38;5;${code}m${text}\x1b[0m`
 const SEARCH_PRICE: Record<string, number> = { turbo: 1_000, fast: 1_000, basic: 5_000, advanced: 5_000 };
 const EXTRA_RESULT_PRICE = 1_000;
 const EXTRACT_PRICE_PER_URL = 1_000;
+const CHECK_PRICE = 1_000; // $1 per 1,000 requests.
 const ANSWER_PRICE: Record<string, number> = { low: 10_000, medium: 50_000, high: 250_000 };
 const TASK_PRICE: Record<string, number> = { core: 25_000, core2x: 50_000, pro: 100_000, ultra: 300_000, ultra2x: 600_000 };
 
@@ -57,6 +58,9 @@ export function statusTotals(runs: RunSummary[]): StatusTotals {
     } else if (run.kind === "extract") {
       totals.counts.web += run.sources;
       totals.microdollars += (Array.isArray(intent.urls) ? intent.urls.length : 1) * EXTRACT_PRICE_PER_URL;
+    } else if (run.kind === "check") {
+      totals.counts.web += run.sources;
+      totals.microdollars += CHECK_PRICE;
     } else if (run.kind === "answer") {
       totals.counts.answer += 1;
       const price = ANSWER_PRICE[intent.effort ?? "medium"];

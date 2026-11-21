@@ -21,14 +21,16 @@ evidence carries over.
 
 ## Status
 
-Five tools, split by who writes the answer. The agent writes it from pages it
-reads (`web_search`, `web_fetch`), or a Parallel research agent writes it
+Six tools, split by who writes the answer. The agent writes it from pages it
+reads (`web_search`, `web_fetch`), Parallel returns calibrated verdicts
+(`web_check`), or a Parallel research agent writes it
 (`web_answer`, `web_research`):
 
 | Tool | Work |
 | --- | --- |
 | `web_search` | Find pages for an objective and 1-3 keyword queries; store the ranked sources and excerpts and return handles. |
 | `web_fetch` | Read known http(s) URLs (pages, PDFs) into the same store, as focused excerpts or full content. |
+| `web_check` | Fast (~0.5-1 s) synchronous grounded decisions through Parallel's Decisions API (`POST /v1/decisions`): one `state` (string or JSON object) describing ONE entity or topic, plus 1-100 keyed questions, each `noul` (yes/no claim -> probability it is true), `choice` (2-255 named options -> chosen option with probabilities), or `score` (2-10 ordered levels -> probability-weighted level). It always searches the live web once for that state, so it is not for purely local/private text or unrelated multi-entity batches. Optional `after_date` (strict YYYY-MM-DD) and `location` (ISO 3166-1 alpha-2 country code). A `refusal` answer is reported as such, not as an error. The receipt shows each question's verdict, probability and confidence, the cited source hosts/URLs, and a reference; verdicts and every citation with its excerpts are stored for `web_recall { reference }` / `web_recall { handle }`. |
 | `web_answer` | Ask Parallel's research agent (Responses API) for a cited answer. The call returns a reference immediately; the answer is researched in the background and arrives as a follow-up message, usually within seconds to about a minute depending on effort. Follow-ups continue in the same conversation via `continue_from`. |
 | `web_research` | Hand a research job to Parallel's deep-research agent (Task API) in the background: a cited report or structured fields with per-field citations. `core` is the processor floor and `ultra2x` the most an agent may choose; progress and completion arrive as alerts. |
 | `web_recall` | Search stored evidence, or read one item by handle in bounded slices. |
@@ -82,7 +84,8 @@ an alert, delivered at-least-once like research alerts.
 
 ## How evidence behaves
 
-- Every Search and Extract result is stored in `research.sqlite` under the Pi
+- Every Search and Extract result, and every web_check verdict and citation, is
+  stored in `research.sqlite` under the Pi
   session that requested it (`WEBTASKS_DIR`, else `<agent-dir>/webtasks`).
 - The model sees a bounded receipt with stable handles, never the whole corpus.
   `web_recall { handle }` returns a bounded slice plus the next offset;
@@ -182,13 +185,15 @@ effect on the next request. Credential files are not packaged or committed.
 Do not install `@parallel-web/pi-extension` alongside this package: it registers a
 `web_search` tool with the same name, so the two would collide.
 
-Balance is not shown by the extension; check the provider account directly. Do
-not paste credential values into tool arguments, diagnostics, or source files.
+Balance is not shown by the extension; check the provider account directly.
+`web_check` is estimated at $0.001 per request (Parallel's $1 per 1,000
+decisions). Do not paste credential values into tool arguments, diagnostics, or
+source files.
 
 ## Limits
 
-- Search and Extract are synchronous calls; `web_answer` and `web_research`
-  run in the background and deliver their results as messages.
+- Search, Extract and web_check are synchronous calls; `web_answer` and
+  `web_research` run in the background and deliver their results as messages.
 - `web_recall` returns bounded pages and slices, never a whole corpus in one
   call. A page cursor carries its own search, so `web_recall { cursor }`
   alone continues it.

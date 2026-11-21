@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-const expectedTools = ["web_search", "web_fetch", "web_research", "web_answer", "web_recall"];
+const expectedTools = ["web_search", "web_fetch", "web_research", "web_answer", "web_check", "web_recall"];
 
 const scratch = mkdtempSync(join(tmpdir(), "pi-webtasks-smoke-"));
 try {

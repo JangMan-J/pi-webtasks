@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,29 +15,53 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The floors live in package.json (engines.node and the pi-coding-agent peer range), written by
+  # `npm run init-package`. The template repository itself has no toolchain, so CI skips it.
+  floors:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.read.outputs.node }}
+      pi: ${{ steps.read.outputs.pi }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: |
+          node -e '
+            const pkg = require("./package.json");
+            const floor = (range, what) => {
+              const m = /^>=\s*(\d+\.\d+\.\d+)$/.exec(range ?? "");
+              if (!m) { console.error(what + " must be \">=X.Y.Z\" in package.json, got " + JSON.stringify(range)); process.exit(1); }
+              return m[1];
+            };
+            console.log("node=" + floor(pkg.engines?.node, "engines.node"));
+            console.log("pi=" + floor(pkg.peerDependencies?.["@earendil-works/pi-coding-agent"], "the @earendil-works/pi-coding-agent peer range"));
+          ' >> "$GITHUB_OUTPUT"
+
   check:
+    needs: floors
     name: Node ${{ matrix.node }} / Pi ${{ matrix.pi }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # 22.19.0 is the engines floor; Pi "locked" is the version in package-lock.json,
-        # and 1.1.0 is the peer-dependency floor.
-        node: ["22.19.0", "24", "26"]
+        # The Node floor, the current LTS, and the newest release, against the locked Pi;
+        # plus the lowest Pi the peer range allows.
+        node: ["${{ needs.floors.outputs.node }}", "lts/*", "current"]
         pi: [locked]
         include:
-          - node: "24"
-            pi: "1.1.0"
+          - node: "lts/*"
+            pi: floor
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - name: Use the minimum supported Pi
-        if: matrix.pi != 'locked'
-        run: npm install --no-save @earendil-works/pi-ai@${{ matrix.pi }} @earendil-works/pi-coding-agent@${{ matrix.pi }}
+      - name: Use the lowest supported Pi
+        if: matrix.pi == 'floor'
+        run: npm install --no-save "@earendil-works/pi-ai@${{ needs.floors.outputs.pi }}" "@earendil-works/pi-coding-agent@${{ needs.floors.outputs.pi }}"
       - run: npm run typecheck
       - run: npm test
       - name: Check the package contents

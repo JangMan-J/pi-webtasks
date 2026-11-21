@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadTools } from "./helpers/test-host.ts";
 
-const TOOLS = ["web_search", "web_fetch", "web_research", "web_answer", "web_recall"];
+const TOOLS = ["web_search", "web_fetch", "web_check", "web_research", "web_answer", "web_recall"];
 
 test("every tool has a snippet, and every guideline names the tool it is about", async () => {
   // Pi merges all tools' guidelines into one flat list of rules with no tool attribution,
@@ -29,6 +29,14 @@ test("web_search requires an objective and keyword queries", async () => {
   assert.deepEqual([...tools.get("web_search").parameters.required].sort(), ["objective", "search_queries"]);
 });
 
+test("web_check requires state and questions and is scoped to one entity on the live web", async () => {
+  const { tools } = await loadTools();
+  const tool = tools.get("web_check");
+  assert.deepEqual([...tool.parameters.required].sort(), ["questions", "state"]);
+  assert.match(tool.description, /live web/);
+  assert.match(tool.description, /\bone\b/i);
+});
+
 test("the answer effort description marks exactly the default the service sends", async () => {
   const { tools } = await loadTools();
   const description = tools.get("web_answer").parameters.properties.effort.description;
@@ -48,5 +56,5 @@ test("promptGuidelines stay concise routing/scheduling rules instead of duplicat
   const guidelines = [...tools.values()].flatMap(tool => tool.promptGuidelines ?? []);
   assert.equal(guidelines.length, 2, "only cross-tool routing and background scheduling belong in <rules>");
   const totalChars = guidelines.join("\n").length;
-  assert.ok(totalChars <= 800, `expected <= 800 guideline chars in <rules>, got ${totalChars}`);
+  assert.ok(totalChars <= 1000, `expected <= 1000 guideline chars in <rules>, got ${totalChars}`);
 });

@@ -20,6 +20,7 @@ import { createResearchService, type ResearchService } from "./research-service.
 import { createRecallService, type RecallService } from "./recall.ts";
 import { createTaskService, type TaskService } from "./task-service.ts";
 import { createAnswerService, type AnswerService } from "./answer-service.ts";
+import { createCheckService, type CheckService } from "./check-service.ts";
 import { registerResearchTools, type ResearchServices } from "./research-tools.ts";
 import { createAlertDelivery, type AlertDelivery } from "./alert-delivery.ts";
 import { WebtasksStatus } from "./status.ts";
@@ -43,6 +44,7 @@ type Runtime = {
   sessionId: string;
   store: ResearchStore;
   research: ResearchService;
+  check: CheckService;
   recall: RecallService;
   task: TaskService;
   answer: AnswerService;
@@ -74,7 +76,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
 
   function currentServices(): ResearchServices {
     if (!rt || rt.released) throw new Error("Research tools are unavailable: the session is not started");
-    return { research: rt.research, recall: rt.recall, task: rt.task, answer: rt.answer, status: rt.status };
+    return { research: rt.research, check: rt.check, recall: rt.recall, task: rt.task, answer: rt.answer, status: rt.status };
   }
 
   /**
@@ -134,6 +136,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
         client,
         clientModel: model?.provider && model?.id ? `${model.provider}/${model.id}` : undefined,
       }),
+      check: createCheckService({ store, sessionId, client }),
       recall: createRecallService({ store, sessionId, alerts }),
       task: createTaskService({
         store,

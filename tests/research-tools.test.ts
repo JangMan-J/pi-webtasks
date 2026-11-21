@@ -4,6 +4,9 @@ import { setup, type Call } from "./helpers/test-host.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
+// Named events, as the Responses API streams them (the existing `sse` below is data-only).
+const eventSse = (events: Record<string, unknown>[]) => new Response(events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+
 const searchBody = {
   search_id: "search_remote_1",
   session_id: "pss_remote_1",
@@ -181,12 +184,20 @@ function taskHost() {
     }
     if (call.path === "/v1/responses") {
       state.answers += 1;
-      return json({
-        id: `resp_${state.answers}`,
-        status: "completed",
-        output_text: "A cited answer.",
-        output: [{ type: "message", content: [{ type: "output_text", text: "A cited answer.", annotations: [] }] }],
-      });
+      const id = `resp_${state.answers}`;
+      return eventSse([
+        { type: "response.created", response: { id, status: "in_progress" } },
+        { type: "response.output_text.delta", delta: "A cited answer." },
+        {
+          type: "response.completed",
+          response: {
+            id,
+            status: "completed",
+            output_text: "A cited answer.",
+            output: [{ type: "message", content: [{ type: "output_text", text: "A cited answer.", annotations: [] }] }],
+          },
+        },
+      ]);
     }
     return json({ error: `unexpected ${call.path}` }, 500);
   };
@@ -211,15 +222,34 @@ test("web_research submits once, collects the run, and delivers a completion ale
   assert.match(read.text, /Final report text about engines/);
 });
 
-test("web_answer stores a cited answer and continues from it", async t => {
+test("web_answer returns at once, delivers the answer as a follow-up, and continues from it", async t => {
   const { handler } = taskHost();
   const h = await setup(t, handler);
   await h.start();
+  const ready = (count: number) => h.sent.filter(entry => JSON.stringify(entry).includes("Answer ready"));
+  const waitReady = async (count: number) => {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && ready(count).length < count) await new Promise(resolveWait => setTimeout(resolveWait, 20));
+    assert.equal(ready(count).length, count, `answer ${count} alert reached Pi`);
+    return ready(count)[count - 1]!;
+  };
+
   const first = await h.call("web_answer", { question: "why?" });
-  assert.match(first.text, /A cited answer/);
-  await h.call("web_answer", { question: "and then?", continue_from: String(first.details.reference) });
+  assert.match(first.text, /Answer running in the background: run_[0-9a-f]{16} \(medium effort\)/);
+  assert.match(first.text, /follow-up message/);
+  const reference = String(first.details.reference);
+
+  const alert = await waitReady(1);
+  assert.deepEqual(alert.options, { deliverAs: "followUp", triggerTurn: true });
+  const alertText = JSON.stringify(alert.message);
+  assert.ok(alertText.includes(reference));
+  assert.ok(alertText.includes("Citations:"));
+
+  await h.call("web_answer", { question: "and then?", continue_from: reference });
+  await waitReady(2);
   const posted = h.calls.filter(call => call.path === "/v1/responses");
   assert.equal(posted.length, 2);
+  assert.equal(posted[0]!.body.stream, true);
   assert.equal(posted[1]!.body.previous_response_id, "resp_1");
 });
 

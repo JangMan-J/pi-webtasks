@@ -68,6 +68,7 @@ export default function piWebtasks(pi: ExtensionAPI) {
     outgoing.status?.close();
     await outgoing.alerts.stop();
     await outgoing.task.stop().catch(() => undefined);
+    await outgoing.answer.stop().catch(() => undefined);
     await outgoing.store.close().catch(() => undefined);
   }
 
@@ -147,7 +148,18 @@ export default function piWebtasks(pi: ExtensionAPI) {
         // Testing aid: shorten the progress sweep without changing the default.
         ...(Number(process.env.WEBTASKS_SWEEP_MS) >= 500 ? { sweepMs: Number(process.env.WEBTASKS_SWEEP_MS) } : {}),
       }),
-      answer: createAnswerService({ store, sessionId, client }),
+      answer: createAnswerService({
+        store,
+        sessionId,
+        client,
+        onAlerts: () => {
+          // A settled answer changes the footer and queues an alert: refresh and wake delivery.
+          void runtime.status?.refresh();
+          void alerts.wake();
+        },
+        status: () => runtime.status,
+        log: message => { if (ctx.hasUI) ctx.ui.notify(`pi-webtasks: ${message}`, "warning"); },
+      }),
       alerts,
       released: false,
     };

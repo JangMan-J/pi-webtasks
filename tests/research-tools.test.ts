@@ -22,6 +22,31 @@ const extractBody = {
   errors: [],
 };
 
+const decisionBody = {
+  mode: "fast",
+  decision_id: "decisions_remote_1",
+  usage: { input_tokens: 10, output_tokens: 0 },
+  citations: [
+    { url: "https://example.org/stripe", title: "Stripe facts", excerpts: ["Stripe is a private company.", "Founded 2010."] },
+    { url: "https://news.example.com/s", title: null, excerpts: [] },
+  ],
+  answers: {
+    is_public: { type: "noul", noul: 0.08 },
+    sector: { type: "choice", choice: "fintech", probabilities: { fintech: 0.9, retail: 0.1 }, confidence: 0.8 },
+    maturity: { type: "score", score: 2.4, legend: { "0": "seed", "1": "growth", "2": "late", "3": "public" }, probabilities: { "0": 0, "1": 0.1, "2": 0.4, "3": 0.5 }, confidence: null },
+    risky: { type: "refusal" },
+  },
+};
+const checkArgs = {
+  state: { company: "Stripe", website: "stripe.com" },
+  questions: {
+    is_public: { type: "noul", instructions: "The company is publicly traded" },
+    sector: { type: "choice", instructions: "Primary sector", criteria: { fintech: "Financial technology", retail: "Retail commerce" } },
+    maturity: { type: "score", instructions: "Company maturity", criteria: ["seed", "growth", "late", "public"] },
+    risky: { type: "noul", instructions: "The company is risky" },
+  },
+};
+
 function host(calls?: Call[]) {
   let n = 0;
   return (call: Call) => {
@@ -29,6 +54,7 @@ function host(calls?: Call[]) {
     n += 1;
     if (call.path === "/v1/search") return json({ ...searchBody, search_id: `search_remote_${n}` });
     if (call.path === "/v1/extract") return json({ ...extractBody, extract_id: `extract_remote_${n}` });
+    if (call.path === "/v1/decisions") return json(decisionBody);
     return json({ error: `unexpected ${call.path}` }, 500);
   };
 }
@@ -263,4 +289,61 @@ test("stored evidence outlives the runtime and the store closes cleanly", async 
   const found = await again.call("web_recall", { query: "durable" });
   assert.equal(found.details.hits, 1);
   await again.stop();
+});
+
+test("web_check sends one decision request and returns a bounded verdict receipt", async t => {
+  const h = await setup(t, host());
+  await h.start();
+  const out = await h.call("web_check", { ...checkArgs, after_date: "2025-01-01", location: "US" });
+
+  assert.equal(h.calls.length, 1);
+  const call = h.calls[0]!;
+  assert.equal(call.method, "POST");
+  assert.equal(call.path, "/v1/decisions");
+  assert.equal(call.headers.get("x-api-key"), "offline-only");
+  assert.equal(call.body.mode, "fast");
+  assert.deepEqual(call.body.advanced_settings, { include_excerpts: true, after_date: "2025-01-01", location: "us" });
+  assert.deepEqual(call.body.state, checkArgs.state);
+  assert.deepEqual(call.body.questions, checkArgs.questions);
+
+  assert.match(out.text, /is_public \(noul\): 0\.08/);
+  assert.match(out.text, /sector \(choice\): fintech/);
+  assert.match(out.text, /maturity \(score\): 2\.40/);
+  assert.match(out.text, /risky \(refusal\)/);
+  assert.match(out.text, /example\.org/);
+  assert.match(out.text, /web_recall \{ reference/);
+  assert.match(out.text, /untrusted/i);
+  assert.doesNotMatch(out.text, /decisions_remote_1/, "provider identities stay local");
+});
+
+test("web_check evidence is readable with web_recall", async t => {
+  const h = await setup(t, host());
+  await h.start();
+  const out = await h.call("web_check", checkArgs);
+  const reference = String(out.details.reference);
+
+  const listed = await h.call("web_recall", { reference });
+  assert.equal(listed.details.hits, 3, "one verdicts record and two sources");
+
+  const handles = out.details.handles as string[];
+  const read = await h.call("web_recall", { handle: handles[1] });
+  assert.match(read.text, /private company/);
+
+  const found = await h.call("web_recall", { query: "Founded" });
+  assert.match(found.text, /Stripe facts/);
+});
+
+test("web_check rejects bad input before any request", async t => {
+  const h = await setup(t, host());
+  await h.start();
+  await assert.rejects(() => h.run("web_check", { ...checkArgs, after_date: "2025-02-31" }), /calendar date/);
+  await assert.rejects(() => h.run("web_check", { ...checkArgs, mode: "fast" }), /does not accept mode/);
+  assert.equal(h.calls.filter(call => call.path === "/v1/decisions").length, 0);
+});
+
+test("a 4xx decision error fails the check without retry", async t => {
+  const h = await setup(t, call => call.path === "/v1/decisions" ? json({ error: { message: "bad" } }, 422) : json({}, 500));
+  await h.start();
+  await assert.rejects(() => h.run("web_check", checkArgs), /Check did not complete/);
+  assert.equal(h.calls.filter(call => call.path === "/v1/decisions").length, 1);
 });

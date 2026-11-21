@@ -29,7 +29,7 @@ reads (`web_search`, `web_fetch`), or a Parallel research agent writes it
 | --- | --- |
 | `web_search` | Find pages for an objective and 1-3 keyword queries; store the ranked sources and excerpts and return handles. |
 | `web_fetch` | Read known http(s) URLs (pages, PDFs) into the same store, as focused excerpts or full content. |
-| `web_answer` | Ask Parallel's research agent (Responses API) for a cited answer in seconds, and follow up in the same conversation. |
+| `web_answer` | Ask Parallel's research agent (Responses API) for a cited answer. The call returns a reference immediately; the answer is researched in the background and arrives as a follow-up message, usually within seconds to about a minute depending on effort. Follow-ups continue in the same conversation via `continue_from`. |
 | `web_research` | Hand a research job to Parallel's deep-research agent (Task API) in the background: a cited report or structured fields with per-field citations. `core` is the processor floor and `ultra2x` the most an agent may choose; progress and completion arrive as alerts. |
 | `web_recall` | Search stored evidence, or read one item by handle in bounded slices. |
 
@@ -73,6 +73,12 @@ Group, so a crash between submission and recording the provider id is recovered
 from the group instead of resubmitting. `core` is the processor floor
 (`lite`/`base` are not offered for research) and `ultra2x` is what an agent may
 choose; the configured default is `core` (`WEBTASKS_TASK_PROCESSOR` overrides).
+
+Answers follow the same background rule at a smaller scale. An in-flight answer
+is aborted when Pi closes, and because the Responses API has no retrieve-by-id
+endpoint, an interrupted answer is marked `uncertain` rather than recovered or
+retried, the same rule as other paid calls. Its completion or failure arrives as
+an alert, delivered at-least-once like research alerts.
 
 ## How evidence behaves
 
@@ -181,8 +187,8 @@ not paste credential values into tool arguments, diagnostics, or source files.
 
 ## Limits
 
-- Search, Extract, and Answers are synchronous calls; only research tasks run in
-  the background.
+- Search and Extract are synchronous calls; `web_answer` and `web_research`
+  run in the background and deliver their results as messages.
 - `web_recall` returns bounded pages and slices, never a whole corpus in one
   call. A page cursor carries its own search, so `web_recall { cursor }`
   alone continues it.

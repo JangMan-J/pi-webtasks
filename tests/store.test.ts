@@ -150,6 +150,24 @@ test("completion commits payload, evidence, index, citations, state, and alert t
   assert.deepEqual(page.hits.map(hit => hit.handle).sort(), [report, source].sort(), "a run's evidence index is browsable");
 });
 
+test("a check run is recorded like any synchronous call", async t => {
+  const { store } = await open(t);
+  const { reference } = await store.beginRun({ sessionId: "s1", intentKey: "c1", intent: {}, kind: "check", state: "submitting" });
+  await store.completeRun({
+    sessionId: "s1",
+    reference,
+    state: "completed",
+    evidence: [
+      { kind: "structured", origin: "provider_structured", body: "The claim is supported.", ref: "v" },
+      { kind: "excerpt", origin: "provider_source", body: "Supporting source text.", ref: "c0", url: "https://example.org/a" },
+    ],
+    citations: [{ evidence: "v", source: "c0", url: "https://example.org/a" }],
+  });
+
+  assert.equal((await store.runSummaries("s1"))[0]!.kind, "check");
+  assert.equal((await store.runSummaries("s1"))[0]!.sources, 1);
+});
+
 test("a bad citation rolls back the whole completion", async t => {
   const { store } = await open(t);
   const { reference } = await store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: { goal: "x" } });
@@ -531,6 +549,14 @@ test("an interrupted request becomes uncertain instead of looking unfinished for
   assert.equal((await store.run("s1", recentAnswer.reference))?.state, "accepted", "a recent bound answer is left to its consumer");
 });
 
+test("an interrupted check run becomes uncertain", async t => {
+  const { store } = await open(t);
+  const { reference } = await store.beginRun({ sessionId: "s1", intentKey: "c1", intent: {}, kind: "check", state: "submitting" });
+
+  assert.equal(await store.reconcileInterrupted("s1", { olderThanMs: 0 }), 1);
+  assert.equal((await store.run("s1", reference))?.state, "uncertain");
+});
+
 test("an older store is migrated in place before the schema indexes run", async t => {
   const dir = await tmp(t);
   const created = new ResearchStore(dir);
@@ -557,7 +583,39 @@ test("an older store is migrated in place before the schema indexes run", async 
   assert.equal(await reopened.markRunning("s1", begun.reference, 100), true);
   const running = await reopened.run("s1", begun.reference);
   assert.equal(running?.next_alert_at, running!.running_at! + 100);
-  assert.equal(await reopened.schemaVersion(), 2);
+  assert.equal(await reopened.schemaVersion(), 3);
+});
+
+test("a store whose runs table predates the check kind is rebuilt without losing evidence", async t => {
+  const dir = await tmp(t);
+  const created = new ResearchStore(dir);
+  await created.init();
+  const old = await completedRun(created, "s1", "old-1", "A walrus crossed the old store.");
+  await created.close();
+
+  const raw = new DatabaseSync(join(dir, "research.sqlite"));
+  raw.exec("PRAGMA foreign_keys = OFF");
+  const { sql } = raw.prepare("SELECT sql FROM sqlite_master WHERE name = 'runs'").get() as { sql: string };
+  const oldSql = sql.replace("CREATE TABLE runs", "CREATE TABLE runs_old").replace(",'check'", "");
+  raw.exec(oldSql);
+  raw.exec("INSERT INTO runs_old SELECT * FROM runs");
+  raw.exec("DROP TABLE runs");
+  raw.exec("ALTER TABLE runs_old RENAME TO runs");
+  raw.exec("PRAGMA user_version = 2");
+  const migratedSql = (raw.prepare("SELECT sql FROM sqlite_master WHERE name = 'runs'").get() as { sql: string }).sql;
+  assert.equal(migratedSql.includes("'check'"), false);
+  raw.close();
+
+  const reopened = new ResearchStore(dir);
+  await reopened.init();
+  t.after(() => reopened.close());
+  assert.equal(await reopened.schemaVersion(), 3);
+  assert.equal((await reopened.search("s1", { query: "walrus" })).hits.length, 1);
+  assert.match((await reopened.readEvidence("s1", old.handle)).text, /walrus/);
+  const check = await reopened.beginRun({ sessionId: "s1", intentKey: "new-check", intent: {}, kind: "check" });
+  assert.equal(check.created, true);
+  await reopened.deleteRun("s1", old.reference);
+  assert.deepEqual((await reopened.search("s1", { query: "walrus" })).hits, [], "foreign-key cascades remain enabled");
 });
 
 test("deleteRun removes the run and keeps the search index in step", async t => {

@@ -38,7 +38,7 @@ import { chmod, mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 export type RunState =
   | "intent"
@@ -71,10 +71,10 @@ export const OPEN_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(
 export const UNCONFIRMED_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting", "uncertain"]);
 export const IN_FLIGHT_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting"]);
 /**
- * For the synchronous-only kinds (search, extract, answer) a run left in one
- * of these states means the runtime died mid-request. Among them only answers
- * can sit in `accepted` (search/extract never bind a provider id). Task runs
- * are excluded by the kind filter because their recovery is provider
+ * For the synchronous-only kinds (search, extract, answer, check) a run left in
+ * one of these states means the runtime died mid-request. Among them only
+ * answers can sit in `accepted` (search/extract/check never bind a provider id).
+ * Task runs are excluded by the kind filter because their recovery is provider
  * reconciliation.
  */
 export const INTERRUPTED_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting", "accepted"]);
@@ -112,7 +112,7 @@ export class StoreError extends Error {
   }
 }
 
-export type RunKind = "task" | "search" | "extract" | "answer";
+export type RunKind = "task" | "search" | "extract" | "answer" | "check";
 
 export type RunRecord = {
   reference: string;
@@ -254,7 +254,8 @@ const EVIDENCE_KINDS: ReadonlySet<string> = new Set<EvidenceKind>(EVIDENCE_KIND_
  * indexes that reference it. A genuinely fresh store has no tables yet and is
  * created complete by the schema itself, so nothing is added here.
  *
- * Only additive changes belong here: the store never rewrites or drops data.
+ * Only additive changes belong here. The run-kind rebuild is the one
+ * data-preserving non-additive step: every run row is copied to the new table.
  */
 const COLUMN_MIGRATIONS: Record<string, Record<string, string>> = {
   runs: {
@@ -278,27 +279,12 @@ function migrateColumns(db: DatabaseSync): void {
   }
 }
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS sessions (
-  session_id TEXT PRIMARY KEY,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS task_groups (
-  session_id TEXT PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
-  group_id TEXT,
-  state TEXT NOT NULL CHECK (state IN ('pending','ready','uncertain')),
-  event_cursor TEXT,
-  error TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS runs (
+/** The runs table. One definition, used by SCHEMA and by the kind-constraint rebuild. */
+function runsTable(name: string): string {
+  return `CREATE TABLE IF NOT EXISTS ${name} (
   reference TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
-  kind TEXT NOT NULL DEFAULT 'task' CHECK (kind IN ('task','search','extract','answer')),
+  kind TEXT NOT NULL DEFAULT 'task' CHECK (kind IN ('task','search','extract','answer','check')),
   group_id TEXT,
   provider_run_id TEXT,
   provider_session_id TEXT,
@@ -317,7 +303,46 @@ CREATE TABLE IF NOT EXISTS runs (
   running_at INTEGER,
   next_alert_at INTEGER,
   alert_interval_ms INTEGER
+);`;
+}
+
+const RUN_COLUMNS = ["reference","session_id","kind","group_id","provider_run_id","provider_session_id","parent","intent_key","state","processor","intent","summary","raw_result","error","created_at","updated_at","terminal_at","provider_interaction_id","running_at","next_alert_at","alert_interval_ms"] as const;
+
+/**
+ * The one non-additive migration: SQLite cannot alter a CHECK constraint, so a runs table
+ * that predates the "check" kind is rebuilt with every row copied. Requires foreign keys
+ * OFF (a DROP would otherwise cascade into evidence, observations, and alerts).
+ */
+function migrateRunKinds(db: DatabaseSync): boolean {
+  const row = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'`).get() as { sql: string } | undefined;
+  if (!row || row.sql.includes("'check'")) return false;
+  const columns = RUN_COLUMNS.join(", ");
+  db.exec(`DROP TABLE IF EXISTS runs_rebuild`);
+  db.exec(runsTable("runs_rebuild"));
+  db.exec(`INSERT INTO runs_rebuild (${columns}) SELECT ${columns} FROM runs`);
+  db.exec(`DROP TABLE runs`);
+  db.exec(`ALTER TABLE runs_rebuild RENAME TO runs`);
+  return true;
+}
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS task_groups (
+  session_id TEXT PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
+  group_id TEXT,
+  state TEXT NOT NULL CHECK (state IN ('pending','ready','uncertain')),
+  event_cursor TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+${runsTable("runs")}
 CREATE INDEX IF NOT EXISTS runs_context ON runs(session_id, provider_session_id);
 CREATE UNIQUE INDEX IF NOT EXISTS runs_intent ON runs(session_id, intent_key);
 CREATE UNIQUE INDEX IF NOT EXISTS runs_provider ON runs(session_id, provider_run_id) WHERE provider_run_id IS NOT NULL;
@@ -524,7 +549,8 @@ export class ResearchStore {
           db.exec("PRAGMA busy_timeout = 5000");
           await enableWal(db);
           db.exec("PRAGMA synchronous = FULL"); // a committed row is on disk before we report it
-          db.exec("PRAGMA foreign_keys = ON");
+          // The kind rebuild must not cascade; this pragma is a no-op inside a transaction.
+          db.exec("PRAGMA foreign_keys = OFF");
           const version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
           if (version > SCHEMA_VERSION) {
             throw new StoreError("conflict", `research store schema ${version} is newer than this build (${SCHEMA_VERSION})`);
@@ -536,9 +562,14 @@ export class ResearchStore {
           db.exec("BEGIN IMMEDIATE");
           try {
             migrateColumns(db);
+            const rebuiltRuns = migrateRunKinds(db);
             db.exec(SCHEMA);
             if (!hadIndex) db.exec(`INSERT INTO evidence_fts (evidence_fts) VALUES ('rebuild')`);
             db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+            if (rebuiltRuns) {
+              const violations = db.prepare("PRAGMA foreign_key_check").all();
+              if (violations.length) throw new StoreError("conflict", "research store migration left dangling references");
+            }
             db.exec("COMMIT");
           } catch (err) {
             try { db.exec("ROLLBACK"); } catch { /* the open fails below */ }
@@ -548,6 +579,7 @@ export class ResearchStore {
           db.close();
           throw err;
         }
+        db.exec("PRAGMA foreign_keys = ON");
         this.db = db;
         // Private result content: the directory already restricts access; keep the file itself closed.
         await chmod(this.path, 0o600).catch(() => undefined);
@@ -905,7 +937,7 @@ export class ResearchStore {
 
   /**
    * Mark synchronous requests that were interrupted before their result was
-   * stored. A Search/Extract row left in `intent`/`submitting` cannot be
+   * stored. A Search/Extract/Check row left in `intent`/`submitting` cannot be
    * trusted either way, so it becomes `uncertain` instead of looking unfinished
    * forever. An answer bound (`accepted`) but never settled is marked
    * `uncertain` too, since the Responses API has no retrieve-by-id endpoint.
@@ -921,7 +953,7 @@ export class ResearchStore {
     const info = this.stmt(
       `UPDATE runs SET state = 'uncertain', error = COALESCE(error, 'interrupted before the result was stored'), updated_at = ?
        WHERE session_id = ? AND state IN (${sqlStates(INTERRUPTED_RUN_STATES)})
-         AND kind IN ('search','extract','answer') AND updated_at <= ?`,
+         AND kind IN ('search','extract','answer','check') AND updated_at <= ?`,
     ).run(now, sessionId, cutoff);
     return Number(info.changes);
   }

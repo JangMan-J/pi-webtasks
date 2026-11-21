@@ -510,17 +510,25 @@ test("an interrupted request becomes uncertain instead of looking unfinished for
   const interrupted = await store.beginRun({ sessionId: "s1", intentKey: "call-1", intent: {}, kind: "search", state: "submitting" });
   const task = await store.beginRun({ sessionId: "s1", intentKey: "call-2", intent: {}, kind: "task", state: "submitting" });
   const finished = await completedRun(store, "s1", "call-3", "A completed body that stays completed.");
+  // A bound answer whose background consumer died before settling it.
+  const boundAnswer = await store.beginRun({ sessionId: "s1", intentKey: "call-4", intent: {}, kind: "answer", state: "accepted" });
+  const boundTask = await store.beginRun({ sessionId: "s1", intentKey: "call-5", intent: {}, kind: "task", state: "accepted" });
 
-  assert.equal(await store.reconcileInterrupted("s1", { olderThanMs: 0 }), 1, "only the synchronous request is settled locally");
+  assert.equal(await store.reconcileInterrupted("s1", { olderThanMs: 0 }), 2, "only the synchronous requests are settled locally");
   assert.equal((await store.run("s1", interrupted.reference))?.state, "uncertain");
   assert.match((await store.run("s1", interrupted.reference))?.error ?? "", /interrupted before the result was stored/);
+  assert.equal((await store.run("s1", boundAnswer.reference))?.state, "uncertain", "a bound but unsettled answer is uncertain");
+  assert.match((await store.run("s1", boundAnswer.reference))?.error ?? "", /interrupted before the result was stored/);
   assert.equal((await store.run("s1", task.reference))?.state, "submitting", "a Task run waits for provider reconciliation");
+  assert.equal((await store.run("s1", boundTask.reference))?.state, "accepted", "a bound Task run waits for provider reconciliation");
   assert.equal((await store.run("s1", finished.reference))?.state, "completed");
 
   // A request that is still recent is left alone: another runtime may still be working on it.
-  const recent = await store.beginRun({ sessionId: "s1", intentKey: "call-4", intent: {}, kind: "search", state: "submitting" });
+  const recent = await store.beginRun({ sessionId: "s1", intentKey: "call-6", intent: {}, kind: "search", state: "submitting" });
+  const recentAnswer = await store.beginRun({ sessionId: "s1", intentKey: "call-7", intent: {}, kind: "answer", state: "accepted" });
   assert.equal(await store.reconcileInterrupted("s1"), 0);
   assert.equal((await store.run("s1", recent.reference))?.state, "submitting");
+  assert.equal((await store.run("s1", recentAnswer.reference))?.state, "accepted", "a recent bound answer is left to its consumer");
 });
 
 test("an older store is migrated in place before the schema indexes run", async t => {

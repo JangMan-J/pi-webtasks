@@ -70,6 +70,14 @@ export const OPEN_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(
 );
 export const UNCONFIRMED_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting", "uncertain"]);
 export const IN_FLIGHT_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting"]);
+/**
+ * For the synchronous-only kinds (search, extract, answer) a run left in one
+ * of these states means the runtime died mid-request. Among them only answers
+ * can sit in `accepted` (search/extract never bind a provider id). Task runs
+ * are excluded by the kind filter because their recovery is provider
+ * reconciliation.
+ */
+export const INTERRUPTED_RUN_STATES: ReadonlySet<RunState> = new Set<RunState>(["intent", "submitting", "accepted"]);
 
 /** A state set as an SQL list. The values are the fixed literals above, never input. */
 function sqlStates(states: ReadonlySet<RunState>): string {
@@ -899,7 +907,9 @@ export class ResearchStore {
    * Mark synchronous requests that were interrupted before their result was
    * stored. A Search/Extract row left in `intent`/`submitting` cannot be
    * trusted either way, so it becomes `uncertain` instead of looking unfinished
-   * forever. Nothing is resubmitted here; the agent sees the honest state.
+   * forever. An answer bound (`accepted`) but never settled is marked
+   * `uncertain` too, since the Responses API has no retrieve-by-id endpoint.
+   * Nothing is resubmitted here; the agent sees the honest state.
    *
    * Task runs are excluded: their recovery is a provider reconciliation, not a
    * local guess, and that is handled separately.
@@ -910,7 +920,7 @@ export class ResearchStore {
     const cutoff = now - Math.max(0, options.olderThanMs ?? 60_000);
     const info = this.stmt(
       `UPDATE runs SET state = 'uncertain', error = COALESCE(error, 'interrupted before the result was stored'), updated_at = ?
-       WHERE session_id = ? AND state IN (${sqlStates(IN_FLIGHT_RUN_STATES)})
+       WHERE session_id = ? AND state IN (${sqlStates(INTERRUPTED_RUN_STATES)})
          AND kind IN ('search','extract','answer') AND updated_at <= ?`,
     ).run(now, sessionId, cutoff);
     return Number(info.changes);
